@@ -1,3 +1,4 @@
+import { DashboardPreview } from "@/components/home/DashboardPreview";
 import { Testimonials } from "@/components/home/testimonials";
 import { Features } from "@/components/common/Features";
 import { Hero } from "@/components/common/Hero";
@@ -8,6 +9,7 @@ export default function HomePage() {
     <>
       <Header />
       <Hero />
+      <DashboardPreview />
       <Features />
       <Testimonials />
     </>
