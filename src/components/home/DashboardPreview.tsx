@@ -42,7 +42,7 @@ export function DashboardPreview() {
           <div className="p-8">
             <div className="rounded-2xl border bg-white p-6">
               <h3 className="mb-6 text-lg font-semibold">
-                Today's Schedule
+                Today&apos;s Schedule
               </h3>
 
               <div className="space-y-4">

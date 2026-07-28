@@ -46,8 +46,8 @@ export function Testimonials() {
               </div>
 
               <p className="mb-8 leading-7 text-muted-foreground">
-                "{item.review}"
-              </p>
+  &ldquo;{item.review}&rdquo;
+</p>
 
               <div>
                 <h4 className="font-semibold">{item.name}</h4>
