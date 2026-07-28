@@ -6,16 +6,28 @@ import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthFooter } from "@/components/auth/AuthFooter";
 import { AuthHeader } from "@/components/auth/AuthHeader";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   return (
     <AuthCard>
       <AuthHeader
-        title="Welcome Back"
-        description="Sign in to your account"
-        emoji="👋"
+        title="Create Account"
+        description="Start managing your bookings today."
+        emoji="🚀"
       />
 
-      <form className="space-y-6">
+      <form className="space-y-5">
+        <div>
+          <Label htmlFor="name">
+            Full Name
+          </Label>
+
+          <Input
+            id="name"
+            type="text"
+            placeholder="John Doe"
+          />
+        </div>
+
         <div>
           <Label htmlFor="email">
             Email
@@ -40,27 +52,30 @@ export default function LoginPage() {
           />
         </div>
 
-        <div className="text-right">
-          <a
-            href="/forgot-password"
-            className="text-sm text-blue-600 hover:underline"
-          >
-            Forgot password?
-          </a>
+        <div>
+          <Label htmlFor="confirmPassword">
+            Confirm Password
+          </Label>
+
+          <Input
+            id="confirmPassword"
+            type="password"
+            placeholder="••••••••"
+          />
         </div>
 
         <Button
           className="w-full"
           size="lg"
         >
-          Login
+          Create Account
         </Button>
       </form>
 
       <AuthFooter
-        text="Don&apos;t have an account?"
-        linkText="Sign Up"
-        href="/register"
+        text="Already have an account?"
+        linkText="Login"
+        href="/login"
       />
     </AuthCard>
   );
