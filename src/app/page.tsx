@@ -1,3 +1,4 @@
+import { CallToAction } from "@/components/home/CallToAction";
 import { Faq } from "@/components/home/Faq";
 import { Pricing } from "@/components/home/Pricing";
 import { Footer } from "@/components/layout/Footer";
@@ -20,7 +21,7 @@ export default function HomePage() {
     <Pricing />
     <Faq />
   </main>
-
+<CallToAction />
   <Footer />
 </>
   );

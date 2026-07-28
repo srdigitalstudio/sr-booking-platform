@@ -7,6 +7,7 @@ import {
   Users,
 } from "lucide-react";
 
+import { FadeIn } from "./FadeIn";
 import { FeatureCard } from "./FeatureCard";
 import { Section } from "./Section";
 import { SectionHeader } from "./SectionHeader";
@@ -59,15 +60,19 @@ export function Features() {
         description="Powerful tools to manage appointments and grow your business."
       />
 
-      <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-        {features.map((feature) => (
-          <FeatureCard
-            key={feature.title}
-            icon={feature.icon}
-            title={feature.title}
-            description={feature.description}
-          />
-        ))}
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+       {features.map((feature, index) => (
+  <FadeIn
+    key={feature.title}
+    delay={index * 0.12}
+  >
+    <FeatureCard
+      icon={feature.icon}
+      title={feature.title}
+      description={feature.description}
+    />
+  </FadeIn>
+))}
       </div>
     </Section>
   );
