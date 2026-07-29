@@ -6,7 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export function AppointmentForm() {
+export type AppointmentFormValues = {
+  customer: string;
+  service: string;
+  date: string;
+  time: string;
+};
+
+type AppointmentFormProps = {
+  onSubmit: (values: AppointmentFormValues) => void;
+};
+
+export function AppointmentForm({
+  onSubmit,
+}: AppointmentFormProps) {
   const [customer, setCustomer] = useState("");
   const [service, setService] = useState("");
   const [date, setDate] = useState("");
@@ -15,14 +28,12 @@ export function AppointmentForm() {
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    console.log({
+    onSubmit({
       customer,
       service,
       date,
       time,
     });
-
-    alert("Appointment created successfully!");
 
     setCustomer("");
     setService("");
@@ -42,9 +53,9 @@ export function AppointmentForm() {
 
         <Input
           id="customer"
-          placeholder="John Doe"
           value={customer}
           onChange={(event) => setCustomer(event.target.value)}
+          placeholder="John Doe"
         />
       </div>
 
@@ -55,9 +66,9 @@ export function AppointmentForm() {
 
         <Input
           id="service"
-          placeholder="Haircut"
           value={service}
           onChange={(event) => setService(event.target.value)}
+          placeholder="Haircut"
         />
       </div>
 

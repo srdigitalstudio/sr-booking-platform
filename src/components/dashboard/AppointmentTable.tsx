@@ -6,15 +6,20 @@ import { SearchBar } from "@/components/dashboard/SearchBar";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { StatusFilter } from "@/components/dashboard/StatusFilter";
 import { Card, CardContent } from "@/components/ui/card";
-import { mockAppointments } from "@/lib/mockAppointments";
-import { AppointmentStatus } from "@/types/appointment";
+import { Appointment, AppointmentStatus } from "@/types/appointment";
 
-export function AppointmentTable() {
+type AppointmentTableProps = {
+  appointments: Appointment[];
+};
+
+export function AppointmentTable({
+  appointments,
+}: AppointmentTableProps) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<AppointmentStatus | "all">("all");
 
-  const appointments = useMemo(() => {
-    return mockAppointments.filter((appointment) => {
+  const filteredAppointments = useMemo(() => {
+    return appointments.filter((appointment) => {
       const query = search.toLowerCase();
 
       const matchesSearch =
@@ -26,7 +31,7 @@ export function AppointmentTable() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [search, status]);
+  }, [appointments, search, status]);
 
   return (
     <Card className="rounded-2xl border-0 shadow-md">
@@ -56,7 +61,7 @@ export function AppointmentTable() {
             </thead>
 
             <tbody>
-              {appointments.map((appointment) => (
+              {filteredAppointments.map((appointment) => (
                 <tr
                   key={appointment.id}
                   className="border-b transition hover:bg-slate-50 last:border-0"
@@ -79,7 +84,7 @@ export function AppointmentTable() {
                 </tr>
               ))}
 
-              {appointments.length === 0 && (
+              {filteredAppointments.length === 0 && (
                 <tr>
                   <td
                     colSpan={4}

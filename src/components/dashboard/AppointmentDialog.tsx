@@ -3,7 +3,10 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 
-import { AppointmentForm } from "@/components/dashboard/AppointmentForm";
+import {
+  AppointmentForm,
+  AppointmentFormValues,
+} from "@/components/dashboard/AppointmentForm";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -13,8 +16,19 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-export function AppointmentDialog() {
+type AppointmentDialogProps = {
+  onSubmit?: (values: AppointmentFormValues) => void;
+};
+
+export function AppointmentDialog({
+  onSubmit,
+}: AppointmentDialogProps) {
   const [open, setOpen] = useState(false);
+
+  function handleSubmit(values: AppointmentFormValues) {
+    onSubmit?.(values);
+    setOpen(false);
+  }
 
   return (
     <Sheet
@@ -22,13 +36,11 @@ export function AppointmentDialog() {
       onOpenChange={setOpen}
     >
       <SheetTrigger
-  render={
-    <Button className="gap-2" />
-  }
->
-  <Plus className="h-4 w-4" />
-  New Appointment
-</SheetTrigger>
+        render={<Button className="gap-2" />}
+      >
+        <Plus className="h-4 w-4" />
+        New Appointment
+      </SheetTrigger>
 
       <SheetContent className="p-8 sm:max-w-lg">
         <SheetHeader>
@@ -38,7 +50,7 @@ export function AppointmentDialog() {
         </SheetHeader>
 
         <div className="mt-6">
-          <AppointmentForm />
+          <AppointmentForm onSubmit={handleSubmit} />
         </div>
       </SheetContent>
     </Sheet>
