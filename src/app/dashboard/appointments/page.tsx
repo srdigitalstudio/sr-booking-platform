@@ -1,7 +1,5 @@
-import { Plus } from "lucide-react";
-
+import { AppointmentDialog } from "@/components/dashboard/AppointmentDialog";
 import { AppointmentTable } from "@/components/dashboard/AppointmentTable";
-import { Button } from "@/components/ui/button";
 
 export default function AppointmentsPage() {
   return (
@@ -17,10 +15,7 @@ export default function AppointmentsPage() {
           </p>
         </div>
 
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          New Appointment
-        </Button>
+        <AppointmentDialog />
       </div>
 
       
