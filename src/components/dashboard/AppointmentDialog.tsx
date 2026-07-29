@@ -21,11 +21,13 @@ export function AppointmentDialog() {
       open={open}
       onOpenChange={setOpen}
     >
-      <SheetTrigger>
-  <Button className="gap-2">
-    <Plus className="h-4 w-4" />
-    New Appointment
-  </Button>
+      <SheetTrigger
+  render={
+    <Button className="gap-2" />
+  }
+>
+  <Plus className="h-4 w-4" />
+  New Appointment
 </SheetTrigger>
 
       <SheetContent className="p-8 sm:max-w-lg">
