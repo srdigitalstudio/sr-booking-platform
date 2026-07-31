@@ -1,0 +1,73 @@
+// Prisma schema for sr-booking-platform
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+ email        String?       @unique
+  phone        String?
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([name])
+  @@index([email])
+  @@index([phone])
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String
+  description  String?
+  duration     Int
+  price        Decimal?      @db.Decimal(10, 2)
+  active       Boolean       @default(true)
+
+  appointments Appointment[]
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([name])
+  @@index([active])
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+
+  customerId  String
+  serviceId   String
+
+  customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+
+  date        DateTime
+  time        String
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([customerId])
+  @@index([serviceId])
+  @@index([date])
+  @@index([status])
+  @@index([date, time])
+}

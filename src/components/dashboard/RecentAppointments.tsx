@@ -1,13 +1,42 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
-import { mockAppointments } from "@/lib/mockAppointments";
 
-export function RecentAppointments() {
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const prisma = new PrismaClient({
+  adapter,
+});
+
+export async function RecentAppointments() {
+  const appointments =
+    await prisma.appointment.findMany({
+      include: {
+        customer: true,
+        service: true,
+      },
+      orderBy: {
+        date: "desc",
+      },
+      take: 5,
+    });
+
   return (
     <Card className="rounded-2xl border-0 shadow-md">
       <CardHeader>
-        <CardTitle>Recent Appointments</CardTitle>
+        <CardTitle>
+          Recent Appointments
+        </CardTitle>
       </CardHeader>
 
       <CardContent>
@@ -23,28 +52,44 @@ export function RecentAppointments() {
             </thead>
 
             <tbody>
-              {mockAppointments.map((appointment) => (
+              {appointments.map((appointment) => (
                 <tr
                   key={appointment.id}
                   className="border-b last:border-0"
                 >
                   <td className="py-4 font-medium">
-                    {appointment.customer}
+                    {appointment.customer.name}
                   </td>
 
-                  <td>{appointment.service}</td>
+                  <td>
+                    {appointment.service.name}
+                  </td>
 
                   <td>
-                    {appointment.date} • {appointment.time}
+                    {appointment.date
+                      .toISOString()
+                      .slice(0, 10)}{" "}
+                    • {appointment.time}
                   </td>
 
                   <td>
                     <StatusBadge
-                      status={appointment.status}
+                      status={appointment.status.toLowerCase() as "pending" | "confirmed" | "completed" | "cancelled"}
                     />
                   </td>
                 </tr>
               ))}
+
+              {appointments.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="py-8 text-center text-muted-foreground"
+                  >
+                    No appointments yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

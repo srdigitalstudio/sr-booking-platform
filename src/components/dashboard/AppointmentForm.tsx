@@ -14,31 +14,48 @@ export type AppointmentFormValues = {
 };
 
 type AppointmentFormProps = {
+  initialValues?: AppointmentFormValues;
+  submitLabel?: string;
   onSubmit: (values: AppointmentFormValues) => void;
 };
 
 export function AppointmentForm({
+  initialValues,
+  submitLabel = "Save Appointment",
   onSubmit,
 }: AppointmentFormProps) {
-  const [customer, setCustomer] = useState("");
-  const [service, setService] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const [form, setForm] = useState<AppointmentFormValues>(
+    initialValues ?? {
+      customer: "",
+      service: "",
+      date: "",
+      time: "",
+    }
+  );
+
+  function updateField<K extends keyof AppointmentFormValues>(
+    key: K,
+    value: AppointmentFormValues[K]
+  ) {
+    setForm((previous) => ({
+      ...previous,
+      [key]: value,
+    }));
+  }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    onSubmit({
-      customer,
-      service,
-      date,
-      time,
-    });
+    onSubmit(form);
 
-    setCustomer("");
-    setService("");
-    setDate("");
-    setTime("");
+    if (!initialValues) {
+      setForm({
+        customer: "",
+        service: "",
+        date: "",
+        time: "",
+      });
+    }
   }
 
   return (
@@ -53,9 +70,11 @@ export function AppointmentForm({
 
         <Input
           id="customer"
-          value={customer}
-          onChange={(event) => setCustomer(event.target.value)}
           placeholder="John Doe"
+          value={form.customer}
+          onChange={(event) =>
+            updateField("customer", event.target.value)
+          }
         />
       </div>
 
@@ -66,9 +85,11 @@ export function AppointmentForm({
 
         <Input
           id="service"
-          value={service}
-          onChange={(event) => setService(event.target.value)}
           placeholder="Haircut"
+          value={form.service}
+          onChange={(event) =>
+            updateField("service", event.target.value)
+          }
         />
       </div>
 
@@ -81,8 +102,10 @@ export function AppointmentForm({
           <Input
             id="date"
             type="date"
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
+            value={form.date}
+            onChange={(event) =>
+              updateField("date", event.target.value)
+            }
           />
         </div>
 
@@ -94,8 +117,10 @@ export function AppointmentForm({
           <Input
             id="time"
             type="time"
-            value={time}
-            onChange={(event) => setTime(event.target.value)}
+            value={form.time}
+            onChange={(event) =>
+              updateField("time", event.target.value)
+            }
           />
         </div>
       </div>
@@ -104,7 +129,7 @@ export function AppointmentForm({
         type="submit"
         className="w-full"
       >
-        Save Appointment
+        {submitLabel}
       </Button>
     </form>
   );

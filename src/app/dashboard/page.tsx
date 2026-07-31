@@ -4,11 +4,57 @@ import {
   Scissors,
   Users,
 } from "lucide-react";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@/generated/prisma/client";
 
 import { RecentAppointments } from "@/components/dashboard/RecentAppointments";
 import { StatCard } from "@/components/dashboard/StatCard";
 
-export default function DashboardPage() {
+const adapter = new PrismaPg({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const prisma = new PrismaClient({
+  adapter,
+});
+
+export default async function DashboardPage() {
+  const [
+    appointmentsCount,
+    customersCount,
+    servicesCount,
+    completedAppointments,
+  ] = await Promise.all([
+    prisma.appointment.count(),
+
+    prisma.customer.count(),
+
+    prisma.service.count({
+      where: {
+        active: true,
+      },
+    }),
+
+    prisma.appointment.findMany({
+      where: {
+        status: "COMPLETED",
+      },
+      include: {
+        service: true,
+      },
+    }),
+  ]);
+
+  const revenue = completedAppointments.reduce(
+    (total, appointment) => {
+      return (
+        total +
+        Number(appointment.service.price ?? 0)
+      );
+    },
+    0
+  );
+
   return (
     <div className="space-y-8">
       <div>
@@ -24,28 +70,28 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Appointments"
-          value="128"
-          description="12 bookings today"
+          value={appointmentsCount.toString()}
+          description="Total bookings"
           icon={CalendarDays}
         />
 
         <StatCard
           title="Customers"
-          value="42"
-          description="5 new this week"
+          value={customersCount.toString()}
+          description="Registered customers"
           icon={Users}
         />
 
         <StatCard
           title="Revenue"
-          value="$4,250"
-          description="+18% this month"
+          value={`$${revenue.toFixed(2)}`}
+          description="Completed appointments"
           icon={CreditCard}
         />
 
         <StatCard
           title="Services"
-          value="8"
+          value={servicesCount.toString()}
           description="Currently active"
           icon={Scissors}
         />

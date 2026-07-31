@@ -2,6 +2,9 @@
 
 import { useMemo, useState } from "react";
 
+import { AppointmentFormValues } from "@/components/dashboard/AppointmentForm";
+import { DeleteAppointmentButton } from "@/components/dashboard/DeleteAppointmentButton";
+import { EditAppointmentDialog } from "@/components/dashboard/EditAppointmentDialog";
 import { SearchBar } from "@/components/dashboard/SearchBar";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import { StatusFilter } from "@/components/dashboard/StatusFilter";
@@ -10,13 +13,21 @@ import { Appointment, AppointmentStatus } from "@/types/appointment";
 
 type AppointmentTableProps = {
   appointments: Appointment[];
+  onEdit: (
+    id: string,
+    values: AppointmentFormValues
+  ) => void;
+  onDelete: (id: string) => void;
 };
 
 export function AppointmentTable({
   appointments,
+  onEdit,
+  onDelete,
 }: AppointmentTableProps) {
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState<AppointmentStatus | "all">("all");
+  const [status, setStatus] =
+    useState<AppointmentStatus | "all">("all");
 
   const filteredAppointments = useMemo(() => {
     return appointments.filter((appointment) => {
@@ -40,7 +51,9 @@ export function AppointmentTable({
           <SearchBar
             placeholder="Search appointments..."
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) =>
+              setSearch(event.target.value)
+            }
           />
 
           <StatusFilter
@@ -57,6 +70,9 @@ export function AppointmentTable({
                 <th className="px-6 py-4">Service</th>
                 <th className="px-6 py-4">Date</th>
                 <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4 text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
 
@@ -81,13 +97,27 @@ export function AppointmentTable({
                   <td className="px-6 py-4">
                     <StatusBadge status={appointment.status} />
                   </td>
+
+                  <td className="px-6 py-4">
+                    <div className="flex justify-end gap-2">
+                      <EditAppointmentDialog
+                        appointment={appointment}
+                        onSubmit={onEdit}
+                      />
+
+                      <DeleteAppointmentButton
+  appointmentId={appointment.id}
+  onDelete={onDelete}
+/>
+                    </div>
+                  </td>
                 </tr>
               ))}
 
               {filteredAppointments.length === 0 && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="py-10 text-center text-muted-foreground"
                   >
                     No appointments found.

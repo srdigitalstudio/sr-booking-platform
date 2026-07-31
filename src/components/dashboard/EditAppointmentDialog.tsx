@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil } from "lucide-react";
 
 import {
   AppointmentForm,
@@ -17,47 +17,6 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-type AppointmentDialogProps = {
-  onSubmit: (values: AppointmentFormValues) => void;
-};
-
-export function AppointmentDialog({
-  onSubmit,
-}: AppointmentDialogProps) {
-  const [open, setOpen] = useState(false);
-
-  function handleSubmit(values: AppointmentFormValues) {
-    onSubmit(values);
-    setOpen(false);
-  }
-
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        render={
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Appointment
-          </Button>
-        }
-      />
-
-      <SheetContent className="p-8 sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>New Appointment</SheetTitle>
-        </SheetHeader>
-
-        <div className="mt-6">
-          <AppointmentForm
-            submitLabel="Create Appointment"
-            onSubmit={handleSubmit}
-          />
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
-
 type EditAppointmentDialogProps = {
   appointment: Appointment;
   onSubmit: (
@@ -71,14 +30,52 @@ export function EditAppointmentDialog({
   onSubmit,
 }: EditAppointmentDialogProps) {
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  function handleSubmit(values: AppointmentFormValues) {
-    onSubmit(appointment.id, values);
-    setOpen(false);
+  async function handleSubmit(
+    values: AppointmentFormValues
+  ) {
+    try {
+      setLoading(true);
+
+      const response = await fetch(
+        "/api/appointments",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id: appointment.id,
+            ...values,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to update appointment"
+        );
+      }
+
+      onSubmit(appointment.id, values);
+      setOpen(false);
+    } catch (error) {
+      console.error(error);
+
+      window.alert(
+        "Unable to update appointment."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+    >
       <SheetTrigger
         render={
           <Button
@@ -92,12 +89,18 @@ export function EditAppointmentDialog({
 
       <SheetContent className="p-8 sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>Edit Appointment</SheetTitle>
+          <SheetTitle>
+            Edit Appointment
+          </SheetTitle>
         </SheetHeader>
 
         <div className="mt-6">
           <AppointmentForm
-            submitLabel="Update Appointment"
+            submitLabel={
+              loading
+                ? "Updating..."
+                : "Update Appointment"
+            }
             initialValues={{
               customer: appointment.customer,
               service: appointment.service,
