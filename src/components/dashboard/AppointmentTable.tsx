@@ -6,26 +6,40 @@ import { AppointmentFormValues } from "@/components/dashboard/AppointmentForm";
 import { DeleteAppointmentButton } from "@/components/dashboard/DeleteAppointmentButton";
 import { EditAppointmentDialog } from "@/components/dashboard/EditAppointmentDialog";
 import { SearchBar } from "@/components/dashboard/SearchBar";
-import { StatusBadge } from "@/components/dashboard/StatusBadge";
+import { StatusSelect } from "@/components/dashboard/StatusSelect";
 import { StatusFilter } from "@/components/dashboard/StatusFilter";
+
 import { Card, CardContent } from "@/components/ui/card";
-import { Appointment, AppointmentStatus } from "@/types/appointment";
+
+import {
+  Appointment,
+  AppointmentStatus,
+} from "@/types/appointment";
 
 type AppointmentTableProps = {
   appointments: Appointment[];
+
   onEdit: (
     id: string,
     values: AppointmentFormValues
-  ) => void;
-  onDelete: (id: string) => void;
+  ) => Promise<void>;
+
+  onDelete: (id: string) => Promise<void>;
+
+  onStatusChange: (
+    id: string,
+    status: AppointmentStatus
+  ) => Promise<void>;
 };
 
 export function AppointmentTable({
   appointments,
   onEdit,
   onDelete,
+  onStatusChange,
 }: AppointmentTableProps) {
   const [search, setSearch] = useState("");
+
   const [status, setStatus] =
     useState<AppointmentStatus | "all">("all");
 
@@ -34,13 +48,21 @@ export function AppointmentTable({
       const query = search.toLowerCase();
 
       const matchesSearch =
-        appointment.customer.toLowerCase().includes(query) ||
-        appointment.service.toLowerCase().includes(query);
+        appointment.customer
+          .toLowerCase()
+          .includes(query) ||
+        appointment.service
+          .toLowerCase()
+          .includes(query);
 
       const matchesStatus =
-        status === "all" || appointment.status === status;
+        status === "all" ||
+        appointment.status === status;
 
-      return matchesSearch && matchesStatus;
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
     });
   }, [appointments, search, status]);
 
@@ -66,10 +88,22 @@ export function AppointmentTable({
           <table className="w-full">
             <thead className="border-b bg-slate-50 text-left text-sm font-medium text-muted-foreground">
               <tr>
-                <th className="px-6 py-4">Customer</th>
-                <th className="px-6 py-4">Service</th>
-                <th className="px-6 py-4">Date</th>
-                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">
+                  Customer
+                </th>
+
+                <th className="px-6 py-4">
+                  Service
+                </th>
+
+                <th className="px-6 py-4">
+                  Date
+                </th>
+
+                <th className="px-6 py-4">
+                  Status
+                </th>
+
                 <th className="px-6 py-4 text-right">
                   Actions
                 </th>
@@ -77,44 +111,62 @@ export function AppointmentTable({
             </thead>
 
             <tbody>
-              {filteredAppointments.map((appointment) => (
-                <tr
-                  key={appointment.id}
-                  className="border-b transition hover:bg-slate-50 last:border-0"
-                >
-                  <td className="px-6 py-4 font-medium">
-                    {appointment.customer}
-                  </td>
+              {filteredAppointments.map(
+                (appointment) => (
+                  <tr
+                    key={appointment.id}
+                    className="border-b transition hover:bg-slate-50 last:border-0"
+                  >
+                    <td className="px-6 py-4 font-medium">
+                      {appointment.customer}
+                    </td>
 
-                  <td className="px-6 py-4">
-                    {appointment.service}
-                  </td>
+                    <td className="px-6 py-4">
+                      {appointment.service}
+                    </td>
 
-                  <td className="px-6 py-4">
-                    {appointment.date} • {appointment.time}
-                  </td>
+                    <td className="px-6 py-4">
+                      {appointment.date} •{" "}
+                      {appointment.time}
+                    </td>
 
-                  <td className="px-6 py-4">
-                    <StatusBadge status={appointment.status} />
-                  </td>
-
-                  <td className="px-6 py-4">
-                    <div className="flex justify-end gap-2">
-                      <EditAppointmentDialog
-                        appointment={appointment}
-                        onSubmit={onEdit}
+                    <td className="px-6 py-4">
+                      <StatusSelect
+                        appointmentId={
+                          appointment.id
+                        }
+                        status={
+                          appointment.status
+                        }
+                        onStatusChange={
+                          onStatusChange
+                        }
                       />
+                    </td>
 
-                      <DeleteAppointmentButton
-  appointmentId={appointment.id}
-  onDelete={onDelete}
-/>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    <td className="px-6 py-4">
+                      <div className="flex justify-end gap-2">
+                        <EditAppointmentDialog
+                          appointment={
+                            appointment
+                          }
+                          onSubmit={onEdit}
+                        />
 
-              {filteredAppointments.length === 0 && (
+                        <DeleteAppointmentButton
+                          appointmentId={
+                            appointment.id
+                          }
+                          onDelete={onDelete}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )
+              )}
+
+              {filteredAppointments.length ===
+                0 && (
                 <tr>
                   <td
                     colSpan={5}

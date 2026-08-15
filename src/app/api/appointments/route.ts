@@ -18,6 +18,13 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
 
+const allowedStatuses = [
+  "PENDING",
+  "CONFIRMED",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+
 // GET
 export async function GET() {
   try {
@@ -155,19 +162,14 @@ export async function PATCH(request: Request) {
       service,
       date,
       time,
+      status,
     } = body;
 
-    if (
-      !id ||
-      !customer ||
-      !service ||
-      !date ||
-      !time
-    ) {
+    if (!id) {
       return NextResponse.json(
         {
           error:
-            "All appointment fields are required",
+            "Appointment ID is required",
         },
         { status: 400 }
       );
@@ -186,6 +188,64 @@ export async function PATCH(request: Request) {
           error: "Appointment not found",
         },
         { status: 404 }
+      );
+    }
+
+    // Status-only update
+    if (status !== undefined) {
+      const normalizedStatus =
+        String(status).toUpperCase();
+
+      if (
+        !allowedStatuses.includes(
+          normalizedStatus as (typeof allowedStatuses)[number]
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error: "Invalid appointment status",
+          },
+          { status: 400 }
+        );
+      }
+
+      const updatedAppointment =
+        await prisma.appointment.update({
+          where: {
+            id,
+          },
+          data: {
+            status:
+              normalizedStatus as
+                | "PENDING"
+                | "CONFIRMED"
+                | "COMPLETED"
+                | "CANCELLED",
+          },
+          include: {
+            customer: true,
+            service: true,
+          },
+        });
+
+      return NextResponse.json(
+        updatedAppointment
+      );
+    }
+
+    // Full appointment update
+    if (
+      !customer ||
+      !service ||
+      !date ||
+      !time
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "All appointment fields are required",
+        },
+        { status: 400 }
       );
     }
 

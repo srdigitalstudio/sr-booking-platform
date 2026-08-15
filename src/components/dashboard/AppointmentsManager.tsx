@@ -8,6 +8,7 @@ import {
 import { AppointmentDialog } from "@/components/dashboard/AppointmentDialog";
 import { AppointmentTable } from "@/components/dashboard/AppointmentTable";
 import { Appointment } from "@/types/appointment";
+import { AppointmentStatus } from "@/types/appointment";
 
 type ApiAppointment = {
   id: string;
@@ -35,7 +36,8 @@ function mapAppointment(
     service: appointment.service.name,
     date: appointment.date.slice(0, 10),
     time: appointment.time,
-    status: appointment.status.toLowerCase() as Appointment["status"],
+    status:
+      appointment.status.toLowerCase() as Appointment["status"],
   };
 }
 
@@ -117,34 +119,133 @@ export function AppointmentsManager() {
     }
   }
 
-  function handleEditAppointment(
+  async function handleEditAppointment(
     id: string,
     values: AppointmentFormValues
   ) {
-    setAppointments((previous) =>
-      previous.map((appointment) =>
-        appointment.id === id
-          ? {
-              ...appointment,
-              customer: values.customer,
-              service: values.service,
-              date: values.date,
-              time: values.time,
-            }
-          : appointment
-      )
-    );
+    try {
+      setError("");
+
+      const response = await fetch(
+        "/api/appointments",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            ...values,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to update appointment"
+        );
+      }
+
+      const data =
+        (await response.json()) as ApiAppointment;
+
+      setAppointments((previous) =>
+        previous.map((appointment) =>
+          appointment.id === id
+            ? mapAppointment(data)
+            : appointment
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Unable to update appointment."
+      );
+    }
   }
 
-  function handleDeleteAppointment(
+  async function handleDeleteAppointment(
     id: string
   ) {
-    setAppointments((previous) =>
-      previous.filter(
-        (appointment) =>
-          appointment.id !== id
-      )
-    );
+    try {
+      setError("");
+
+      const response = await fetch(
+        "/api/appointments",
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to delete appointment"
+        );
+      }
+
+      setAppointments((previous) =>
+        previous.filter(
+          (appointment) =>
+            appointment.id !== id
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Unable to delete appointment."
+      );
+    }
+  }
+
+  async function handleStatusChange(
+    id: string,
+    status: AppointmentStatus
+  ) {
+    try {
+      setError("");
+
+      const response = await fetch(
+        "/api/appointments",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            status,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to update appointment status"
+        );
+      }
+
+      const data =
+        (await response.json()) as ApiAppointment;
+
+      setAppointments((previous) =>
+        previous.map((appointment) =>
+          appointment.id === id
+            ? mapAppointment(data)
+            : appointment
+        )
+      );
+    } catch (err) {
+      console.error(err);
+      setError(
+        "Unable to update appointment status."
+      );
+    }
   }
 
   return (
@@ -170,6 +271,7 @@ export function AppointmentsManager() {
           appointments={appointments}
           onEdit={handleEditAppointment}
           onDelete={handleDeleteAppointment}
+          onStatusChange={handleStatusChange}
         />
       )}
     </>
