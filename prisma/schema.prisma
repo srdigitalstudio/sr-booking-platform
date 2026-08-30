@@ -19,7 +19,7 @@ enum AppointmentStatus {
 model Customer {
   id           String        @id @default(cuid())
   name         String
- email        String?       @unique
+  email        String?       @unique
   phone        String?
   appointments Appointment[]
 
@@ -50,12 +50,11 @@ model Service {
 
 model Appointment {
   id          String            @id @default(cuid())
-
   customerId  String
   serviceId   String
 
   customer    Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  service     Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  service     Service            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
 
   date        DateTime
   time        String
@@ -70,4 +69,46 @@ model Appointment {
   @@index([date])
   @@index([status])
   @@index([date, time])
+}
+
+model Settings {
+  id                       String            @id @default(cuid())
+  businessName             String            @default("SR Booking")
+  businessType             String            @default("Booking Platform")
+  bookingEnabled           Boolean           @default(true)
+  defaultAppointmentStatus AppointmentStatus @default(PENDING)
+  bookingNotifications     Boolean           @default(true)
+  customerNotifications    Boolean           @default(true)
+  language                 String            @default("English")
+  currency                 String            @default("USD")
+
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+
+  sessions     Session[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

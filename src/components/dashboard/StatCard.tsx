@@ -16,25 +16,65 @@ export function StatCard({
   icon: Icon,
 }: StatCardProps) {
   return (
-    <Card className="group rounded-2xl border-0 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg">
-      <CardContent className="flex min-h-[140px] items-center justify-between gap-4 p-5 sm:p-6">
+    <Card
+      className="
+        group
+        rounded-2xl
+        border-border
+        bg-card
+        shadow-md
+        transition-all
+        duration-300
+        hover:-translate-y-1
+        hover:border-blue-300
+        hover:shadow-[0_15px_35px_rgba(37,99,235,0.18)]
+      "
+    >
+      <CardContent className="flex items-center justify-between p-6">
         <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">
             {title}
           </p>
 
-          <h3 className="mt-2 truncate text-2xl font-bold tracking-tight sm:text-3xl">
+          <h3 className="mt-2 truncate text-3xl font-bold tracking-tight">
             {value}
           </h3>
 
-          <p className="mt-2 text-xs text-muted-foreground sm:text-sm">
+          <p className="mt-2 text-sm text-muted-foreground">
             {description}
           </p>
         </div>
 
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 transition-transform duration-200 group-hover:scale-105 sm:h-14 sm:w-14">
+        <div
+          className="
+            ml-4
+            flex
+            h-14
+            w-14
+            shrink-0
+            items-center
+            justify-center
+            rounded-2xl
+            bg-blue-100
+            transition-all
+            duration-300
+            group-hover:scale-110
+            group-hover:bg-blue-600
+            dark:bg-blue-950
+            dark:group-hover:bg-blue-600
+          "
+        >
           <Icon
-            className="h-6 w-6 text-blue-600 sm:h-7 sm:w-7"
+            className="
+              h-7
+              w-7
+              text-blue-600
+              transition-colors
+              duration-300
+              group-hover:text-white
+              dark:text-blue-400
+              dark:group-hover:text-white
+            "
             aria-hidden="true"
           />
         </div>

@@ -17,10 +17,13 @@ export function SearchBar({
 }: SearchBarProps) {
   return (
     <div className="relative w-full max-w-sm">
-      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Search
+        className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
 
       <Input
-        className="pl-10"
+        className="border-border bg-background pl-10 text-foreground placeholder:text-muted-foreground dark:bg-slate-900"
         placeholder={placeholder}
         value={value}
         onChange={onChange}

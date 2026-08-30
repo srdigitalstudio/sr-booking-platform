@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { UserPlus } from "lucide-react";
+import { useState } from "react";
 
 import {
   CustomerForm,
@@ -11,13 +11,16 @@ import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 
 type AddCustomerDialogProps = {
-  onSubmit: (values: CustomerFormValues) => void;
+  onSubmit: (
+    values: CustomerFormValues
+  ) => void | Promise<void>;
 };
 
 export function AddCustomerDialog({
@@ -25,8 +28,10 @@ export function AddCustomerDialog({
 }: AddCustomerDialogProps) {
   const [open, setOpen] = useState(false);
 
-  function handleSubmit(values: CustomerFormValues) {
-    onSubmit(values);
+  async function handleSubmit(
+    values: CustomerFormValues
+  ) {
+    await onSubmit(values);
     setOpen(false);
   }
 
@@ -34,21 +39,29 @@ export function AddCustomerDialog({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         render={
-          <Button>
-            <UserPlus className="mr-2 h-4 w-4" />
+          <Button className="h-11 gap-2 rounded-xl bg-blue-600 px-5 font-semibold text-white shadow-sm transition-all hover:bg-blue-700 hover:shadow-md">
+            <UserPlus
+              className="h-4 w-4"
+              aria-hidden="true"
+            />
             Add Customer
           </Button>
         }
       />
 
-      <SheetContent className="p-8 sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>
+      <SheetContent className="w-full overflow-y-auto p-6 sm:max-w-lg sm:p-8">
+        <SheetHeader className="space-y-2">
+          <SheetTitle className="text-xl font-bold">
             Add Customer
           </SheetTitle>
+
+          <SheetDescription>
+            Create a new customer profile for your booking
+            system.
+          </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-6">
+        <div className="mt-8">
           <CustomerForm
             submitLabel="Create Customer"
             onSubmit={handleSubmit}

@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 
 import { Logo } from "@/components/common/Logo";
@@ -7,7 +8,7 @@ import { Container } from "./Container";
 
 export function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur">
       <Container className="flex h-16 items-center justify-between">
         <Logo />
 
@@ -23,7 +24,11 @@ export function Header() {
           ))}
         </nav>
 
-        <Button>Sign In</Button>
+        <Link href="/login">
+          <Button>
+            Sign In
+          </Button>
+        </Link>
       </Container>
     </header>
   );

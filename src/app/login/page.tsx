@@ -12,7 +12,7 @@ export default function LoginPage() {
       <AuthHeader
         title="Welcome Back"
         description="Sign in to your account"
-        emoji="👋"
+        
       />
 
       <form className="space-y-6">

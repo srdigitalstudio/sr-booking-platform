@@ -1,6 +1,8 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
+import { requireApiUser } from "@/lib/api-auth";
+
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
 });
@@ -11,6 +13,15 @@ const prisma = new PrismaClient({
 
 export async function GET() {
   try {
+    const user = await requireApiUser();
+
+    if (!user) {
+      return Response.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const customers = await prisma.customer.findMany({
       orderBy: {
         createdAt: "desc",
@@ -33,6 +44,15 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await requireApiUser();
+
+    if (!user) {
+      return Response.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const name = String(body.name ?? "").trim();
@@ -70,6 +90,15 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
+    const user = await requireApiUser();
+
+    if (!user) {
+      return Response.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const id = String(body.id ?? "").trim();
@@ -115,8 +144,18 @@ export async function PUT(request: Request) {
     );
   }
 }
+
 export async function DELETE(request: Request) {
   try {
+    const user = await requireApiUser();
+
+    if (!user) {
+      return Response.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const id = String(body.id ?? "").trim();

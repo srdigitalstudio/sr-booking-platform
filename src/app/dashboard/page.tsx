@@ -47,27 +47,26 @@ export default async function DashboardPage() {
 
   const revenue = completedAppointments.reduce(
     (total, appointment) => {
-      return (
-        total +
-        Number(appointment.service.price ?? 0)
-      );
+      return total + Number(appointment.service.price ?? 0);
     },
     0
   );
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold">
-          Dashboard
-        </h1>
+    <div className="space-y-6 sm:space-y-8">
+      <div className="flex flex-col gap-2">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Dashboard
+          </h1>
 
-        <p className="mt-2 text-muted-foreground">
-          Welcome to SR Booking Platform.
-        </p>
+          <p className="mt-1.5 text-sm text-muted-foreground sm:mt-2 sm:text-base">
+            Welcome to SR Booking Platform.
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-6">
         <StatCard
           title="Appointments"
           value={appointmentsCount.toString()}
@@ -97,7 +96,9 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <RecentAppointments />
+      <div className="min-w-0">
+        <RecentAppointments />
+      </div>
     </div>
   );
 }

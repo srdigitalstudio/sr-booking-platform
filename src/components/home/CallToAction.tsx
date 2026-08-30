@@ -1,4 +1,5 @@
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+
 import { FadeIn } from "@/components/common/FadeIn";
 import { Section } from "@/components/common/Section";
 
@@ -18,21 +19,19 @@ export function CallToAction() {
           </p>
 
           <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
-            <Button
-              size="lg"
-              variant="secondary"
-              className="transition-transform duration-300 hover:scale-105"
+            <Link
+              href="/register"
+              className="inline-flex h-11 items-center justify-center rounded-md bg-white px-8 text-sm font-medium text-blue-600 shadow transition-transform duration-300 hover:scale-105"
             >
               Get Started Free
-            </Button>
+            </Link>
 
-            <Button
-              size="lg"
-              variant="outline"
-              className="border-white bg-transparent text-white transition-transform duration-300 hover:scale-105 hover:bg-white hover:text-blue-600"
+            <Link
+              href="/dashboard"
+              className="inline-flex h-11 items-center justify-center rounded-md border border-white bg-transparent px-8 text-sm font-medium text-white transition-transform duration-300 hover:scale-105 hover:bg-white hover:text-blue-600"
             >
               Book a Demo
-            </Button>
+            </Link>
           </div>
         </div>
       </FadeIn>

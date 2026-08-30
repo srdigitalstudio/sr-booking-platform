@@ -56,7 +56,7 @@ export function StatusSelect({
       value={status}
       onChange={handleChange}
       disabled={loading}
-      className="rounded-full border bg-background px-3 py-1.5 text-xs font-semibold outline-none transition focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+      className="rounded-full border border-input bg-background px-3 py-1.5 text-xs font-semibold text-foreground outline-none transition focus:ring-2 focus:ring-ring dark:bg-card dark:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
       aria-label={`Change appointment status to ${labels[status]}`}
     >
       {(

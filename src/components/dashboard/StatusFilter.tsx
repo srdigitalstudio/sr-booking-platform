@@ -13,9 +13,11 @@ export function StatusFilter({
     <select
       value={value}
       onChange={(event) =>
-        onChange(event.target.value as AppointmentStatus | "all")
+        onChange(
+          event.target.value as AppointmentStatus | "all"
+        )
       }
-      className="h-10 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground shadow-sm outline-none transition focus:ring-2 focus:ring-blue-500 dark:bg-card dark:text-foreground"
     >
       <option value="all">All</option>
       <option value="confirmed">Confirmed</option>
