@@ -2,6 +2,7 @@ import {
   Users,
   UserRoundCheck,
 } from "lucide-react";
+import { revalidatePath } from "next/cache";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
@@ -98,11 +99,21 @@ export default async function CustomersPage() {
           phone: phone || null,
         },
       });
+
+      revalidatePath("/dashboard/customers");
     } catch (error) {
       console.error(
         "Failed to create customer:",
         error
       );
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "A customer with this email already exists."
+      ) {
+        throw error;
+      }
 
       throw new Error(
         "Failed to create customer. Please try again."
@@ -176,6 +187,8 @@ export default async function CustomersPage() {
           phone: phone || null,
         },
       });
+
+      revalidatePath("/dashboard/customers");
     } catch (error) {
       console.error(
         "Failed to update customer:",
