@@ -31,6 +31,15 @@ const allowedStatuses = [
 
 type AllowedStatus = (typeof allowedStatuses)[number];
 
+type DayOfWeek =
+  | "SATURDAY"
+  | "SUNDAY"
+  | "MONDAY"
+  | "TUESDAY"
+  | "WEDNESDAY"
+  | "THURSDAY"
+  | "FRIDAY";
+
 const DEFAULT_SETTINGS = {
   businessName: "SR Booking",
   businessType: "Booking Platform",
@@ -84,7 +93,7 @@ function isValidDateFormat(value: string): boolean {
  * Store appointment dates consistently at UTC midnight.
  *
  * The UI sends YYYY-MM-DD, so we intentionally avoid
- * `new Date("YYYY-MM-DD")` ambiguity across environments.
+ * new Date("YYYY-MM-DD") ambiguity across environments.
  */
 function parseAppointmentDate(
   value: string
@@ -110,6 +119,48 @@ function parseAppointmentDate(
   }
 
   return date;
+}
+
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time
+    .split(":")
+    .map(Number);
+
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  return `${String(hours).padStart(2, "0")}:${String(
+    minutes
+  ).padStart(2, "0")}`;
+}
+
+function getDayOfWeek(
+  date: Date
+): DayOfWeek {
+  const day = date.getUTCDay();
+
+  switch (day) {
+    case 0:
+      return "SUNDAY";
+    case 1:
+      return "MONDAY";
+    case 2:
+      return "TUESDAY";
+    case 3:
+      return "WEDNESDAY";
+    case 4:
+      return "THURSDAY";
+    case 5:
+      return "FRIDAY";
+    case 6:
+      return "SATURDAY";
+    default:
+      return "SUNDAY";
+  }
 }
 
 function createCustomerEmail(
@@ -146,7 +197,8 @@ async function getSettings() {
 async function findOrCreateCustomer(
   customerName: string
 ) {
-  const email = createCustomerEmail(customerName);
+  const email =
+    createCustomerEmail(customerName);
 
   return prisma.customer.upsert({
     where: {
@@ -186,6 +238,190 @@ async function getAuthenticatedUser() {
   return user;
 }
 
+/**
+ * Validates the appointment against:
+ * - blocked dates
+ * - configured business hours
+ * - business opening/closing time
+ * - business breaks
+ * - the service duration
+ * - other active appointments
+ */
+async function validateAppointmentAvailability({
+  date,
+  time,
+  duration,
+  excludeAppointmentId,
+}: {
+  date: Date;
+  time: string;
+  duration: number;
+  excludeAppointmentId?: string;
+}) {
+  const dayOfWeek = getDayOfWeek(date);
+
+  const businessHour =
+    await prisma.businessHour.findUnique({
+      where: {
+        dayOfWeek,
+      },
+    });
+
+  if (!businessHour) {
+    return {
+      valid: false,
+      error:
+        "Business hours for this day have not been configured.",
+    };
+  }
+
+  if (!businessHour.isOpen) {
+    return {
+      valid: false,
+      error:
+        "The business is closed on this day.",
+    };
+  }
+
+  const blockedDate =
+    await prisma.blockedDate.findUnique({
+      where: {
+        date,
+      },
+    });
+
+  if (blockedDate) {
+    return {
+      valid: false,
+      error:
+        blockedDate.reason
+          ? `This date is blocked: ${blockedDate.reason}`
+          : "This date is blocked for bookings.",
+    };
+  }
+
+  const startMinutes =
+    timeToMinutes(time);
+
+  const endMinutes =
+    startMinutes + duration;
+
+  const businessStart =
+    timeToMinutes(
+      businessHour.startTime
+    );
+
+  const businessEnd =
+    timeToMinutes(
+      businessHour.endTime
+    );
+
+  if (startMinutes < businessStart) {
+    return {
+      valid: false,
+      error:
+        `Appointment must start at or after ${businessHour.startTime}.`,
+    };
+  }
+
+  if (endMinutes > businessEnd) {
+    return {
+      valid: false,
+      error:
+        `This appointment would end at ${minutesToTime(
+          endMinutes
+        )}, outside business hours ending at ${businessHour.endTime}.`,
+    };
+  }
+
+  const businessBreaks =
+    await prisma.businessBreak.findMany({
+      where: {
+        dayOfWeek,
+      },
+    });
+
+  const appointmentStart = startMinutes;
+  const appointmentEnd = endMinutes;
+
+  const overlappingBreak =
+    businessBreaks.find((businessBreak) => {
+      const breakStart =
+        timeToMinutes(
+          businessBreak.startTime
+        );
+
+      const breakEnd =
+        timeToMinutes(
+          businessBreak.endTime
+        );
+
+      return (
+        appointmentStart < breakEnd &&
+        appointmentEnd > breakStart
+      );
+    });
+
+  if (overlappingBreak) {
+    return {
+      valid: false,
+      error:
+        overlappingBreak.label
+          ? `This appointment overlaps with the break "${overlappingBreak.label}".`
+          : "This appointment overlaps with a business break.",
+    };
+  }
+
+  const appointments =
+    await prisma.appointment.findMany({
+      where: {
+        date,
+        status: {
+          not: "CANCELLED",
+        },
+        ...(excludeAppointmentId
+          ? {
+              id: {
+                not: excludeAppointmentId,
+              },
+            }
+          : {}),
+      },
+      include: {
+        service: true,
+      },
+    });
+
+  const overlappingAppointment =
+    appointments.find((existingAppointment) => {
+      const existingStart =
+        timeToMinutes(
+          existingAppointment.time
+        );
+
+      const existingEnd =
+        existingStart +
+        existingAppointment.service.duration;
+
+      return (
+        appointmentStart < existingEnd &&
+        appointmentEnd > existingStart
+      );
+    });
+
+  if (overlappingAppointment) {
+    return {
+      valid: false,
+      error:
+        `This time overlaps with an existing appointment at ${overlappingAppointment.time}.`,
+    };
+  }
+
+  return {
+    valid: true,
+  };
+}
+
 function handleUnexpectedError(
   operation: string,
   error: unknown
@@ -207,7 +443,8 @@ function handleUnexpectedError(
 
 export async function GET() {
   try {
-    const user = await getAuthenticatedUser();
+    const user =
+      await getAuthenticatedUser();
 
     if (!user) {
       return jsonError(
@@ -251,7 +488,8 @@ export async function POST(
   request: Request
 ) {
   try {
-    const user = await getAuthenticatedUser();
+    const user =
+      await getAuthenticatedUser();
 
     if (!user) {
       return jsonError(
@@ -260,7 +498,10 @@ export async function POST(
       );
     }
 
-    let body: Record<string, unknown>;
+    let body: Record<
+      string,
+      unknown
+    >;
 
     try {
       body =
@@ -275,21 +516,17 @@ export async function POST(
       );
     }
 
-    const customer = normalizeText(
-      body.customer
-    );
+    const customer =
+      normalizeText(body.customer);
 
-    const service = normalizeText(
-      body.service
-    );
+    const service =
+      normalizeText(body.service);
 
-    const date = normalizeText(
-      body.date
-    );
+    const date =
+      normalizeText(body.date);
 
-    const time = normalizeText(
-      body.time
-    );
+    const time =
+      normalizeText(body.time);
 
     if (
       !customer ||
@@ -334,7 +571,8 @@ export async function POST(
       );
     }
 
-    const settings = await getSettings();
+    const settings =
+      await getSettings();
 
     if (!settings.bookingEnabled) {
       return jsonError(
@@ -353,21 +591,30 @@ export async function POST(
       );
     }
 
-    const existingAppointment =
-      await prisma.appointment.findFirst({
-        where: {
-          serviceId: serviceRecord.id,
-          date: appointmentDate,
-          time,
-          status: {
-            not: "CANCELLED",
-          },
-        },
+    if (
+      !Number.isInteger(
+        serviceRecord.duration
+      ) ||
+      serviceRecord.duration <= 0
+    ) {
+      return jsonError(
+        "The selected service has an invalid duration.",
+        400
+      );
+    }
+
+    const availability =
+      await validateAppointmentAvailability({
+        date: appointmentDate,
+        time,
+        duration:
+          serviceRecord.duration,
       });
 
-    if (existingAppointment) {
+    if (!availability.valid) {
       return jsonError(
-        "This time slot is already booked for this service.",
+        availability.error ??
+          "This appointment time is not available.",
         409
       );
     }
@@ -380,8 +627,10 @@ export async function POST(
     const appointment =
       await prisma.appointment.create({
         data: {
-          customerId: customerRecord.id,
-          serviceId: serviceRecord.id,
+          customerId:
+            customerRecord.id,
+          serviceId:
+            serviceRecord.id,
           date: appointmentDate,
           time,
           status:
@@ -415,7 +664,8 @@ export async function PATCH(
   request: Request
 ) {
   try {
-    const user = await getAuthenticatedUser();
+    const user =
+      await getAuthenticatedUser();
 
     if (!user) {
       return jsonError(
@@ -424,7 +674,10 @@ export async function PATCH(
       );
     }
 
-    let body: Record<string, unknown>;
+    let body: Record<
+      string,
+      unknown
+    >;
 
     try {
       body =
@@ -439,7 +692,8 @@ export async function PATCH(
       );
     }
 
-    const id = normalizeText(body.id);
+    const id =
+      normalizeText(body.id);
 
     if (!id) {
       return jsonError(
@@ -487,7 +741,8 @@ export async function PATCH(
             id,
           },
           data: {
-            status: normalizedStatus,
+            status:
+              normalizedStatus,
           },
           include: {
             customer: true,
@@ -502,21 +757,17 @@ export async function PATCH(
 
     /* -------------------------- Full update ----------------------------- */
 
-    const customer = normalizeText(
-      body.customer
-    );
+    const customer =
+      normalizeText(body.customer);
 
-    const service = normalizeText(
-      body.service
-    );
+    const service =
+      normalizeText(body.service);
 
-    const date = normalizeText(
-      body.date
-    );
+    const date =
+      normalizeText(body.date);
 
-    const time = normalizeText(
-      body.time
-    );
+    const time =
+      normalizeText(body.time);
 
     if (
       !customer ||
@@ -571,24 +822,32 @@ export async function PATCH(
       );
     }
 
-    const conflictingAppointment =
-      await prisma.appointment.findFirst({
-        where: {
-          id: {
-            not: id,
-          },
-          serviceId: serviceRecord.id,
-          date: appointmentDate,
-          time,
-          status: {
-            not: "CANCELLED",
-          },
-        },
+    if (
+      !Number.isInteger(
+        serviceRecord.duration
+      ) ||
+      serviceRecord.duration <= 0
+    ) {
+      return jsonError(
+        "The selected service has an invalid duration.",
+        400
+      );
+    }
+
+    const availability =
+      await validateAppointmentAvailability({
+        date: appointmentDate,
+        time,
+        duration:
+          serviceRecord.duration,
+        excludeAppointmentId:
+          id,
       });
 
-    if (conflictingAppointment) {
+    if (!availability.valid) {
       return jsonError(
-        "This time slot is already booked for this service.",
+        availability.error ??
+          "This appointment time is not available.",
         409
       );
     }
@@ -636,7 +895,8 @@ export async function DELETE(
   request: Request
 ) {
   try {
-    const user = await getAuthenticatedUser();
+    const user =
+      await getAuthenticatedUser();
 
     if (!user) {
       return jsonError(
@@ -645,7 +905,10 @@ export async function DELETE(
       );
     }
 
-    let body: Record<string, unknown>;
+    let body: Record<
+      string,
+      unknown
+    >;
 
     try {
       body =
@@ -660,7 +923,8 @@ export async function DELETE(
       );
     }
 
-    const id = normalizeText(body.id);
+    const id =
+      normalizeText(body.id);
 
     if (!id) {
       return jsonError(

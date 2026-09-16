@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { requireApiUser } from "@/lib/api-auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -53,6 +54,19 @@ async function getSettings() {
 
 // GET /api/settings
 export async function GET() {
+  const user = await requireApiUser();
+
+  if (!user) {
+    return Response.json(
+      {
+        error: "Unauthorized",
+      },
+      {
+        status: 401,
+      }
+    );
+  }
+
   try {
     const settings = await getSettings();
 
@@ -76,6 +90,19 @@ export async function GET() {
 
 // PUT /api/settings
 export async function PUT(request: Request) {
+  const user = await requireApiUser();
+
+  if (!user) {
+    return Response.json(
+      {
+        error: "Unauthorized",
+      },
+      {
+        status: 401,
+      }
+    );
+  }
+
   try {
     const body = await request.json();
 

@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   Building2,
-  Check,
-  ChevronRight,
-  CircleAlert,
   Globe,
-  RotateCcw,
   Save,
   Settings,
 } from "lucide-react";
@@ -22,6 +18,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AvailabilitySettings } from "@/components/dashboard/AvailabilitySettings";
 
 type AppointmentStatus =
   | "PENDING"
@@ -51,162 +48,34 @@ const defaultSettings: SettingsData = {
   currency: "USD",
 };
 
-const appointmentStatusOptions: {
-  value: AppointmentStatus;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "PENDING",
-    label: "Pending",
-    description: "New bookings wait for confirmation.",
-  },
-  {
-    value: "CONFIRMED",
-    label: "Confirmed",
-    description: "New bookings are confirmed automatically.",
-  },
-  {
-    value: "COMPLETED",
-    label: "Completed",
-    description: "New bookings start as completed.",
-  },
-  {
-    value: "CANCELLED",
-    label: "Cancelled",
-    description: "New bookings start as cancelled.",
-  },
-];
-
-function SettingsSkeleton() {
-  return (
-    <div className="space-y-8">
-      <div className="space-y-3">
-        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
-        <div className="h-4 w-80 max-w-full animate-pulse rounded bg-muted" />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {Array.from({ length: 4 }).map((_, index) => (
-          <div
-            key={index}
-            className="h-72 animate-pulse rounded-2xl border bg-muted/40"
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SectionIcon({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-      {children}
-    </div>
-  );
-}
-
-function SettingSwitch({
-  checked,
-  onChange,
-  title,
-  description,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="flex w-full items-center justify-between gap-5 rounded-2xl border bg-background p-4 text-left transition hover:border-blue-300 hover:bg-blue-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:border-blue-800 dark:hover:bg-blue-950/20"
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold">{title}</p>
-
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          {description}
-        </p>
-      </div>
-
-      <span
-        aria-hidden="true"
-        className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-          checked
-            ? "bg-blue-600"
-            : "bg-slate-200 dark:bg-slate-700"
-        }`}
-      >
-        <span
-          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition ${
-            checked ? "left-6" : "left-1"
-          }`}
-        />
-      </span>
-    </button>
-  );
-}
-
 export default function SettingsPage() {
   const [settings, setSettings] =
     useState<SettingsData>(defaultSettings);
 
-  const [savedSettings, setSavedSettings] =
-    useState<SettingsData>(defaultSettings);
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const hasChanges = useMemo(() => {
-    return JSON.stringify(settings) !== JSON.stringify(savedSettings);
-  }, [settings, savedSettings]);
 
   useEffect(() => {
     async function loadSettings() {
       try {
         setLoading(true);
         setError("");
-        setMessage("");
 
-        const response = await fetch("/api/settings", {
-          method: "GET",
-          cache: "no-store",
-        });
+        const response = await fetch("/api/settings");
 
         if (!response.ok) {
-          const data = await response
-            .json()
-            .catch(() => null);
-
-          throw new Error(
-            data?.error || "Failed to load settings."
-          );
+          throw new Error("Failed to load settings");
         }
 
         const data =
           (await response.json()) as SettingsData;
 
         setSettings(data);
-        setSavedSettings(data);
       } catch (err) {
         console.error(err);
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Unable to load settings."
-        );
+        setError("Unable to load settings.");
       } finally {
         setLoading(false);
       }
@@ -227,17 +96,7 @@ export default function SettingsPage() {
     setError("");
   }
 
-  function handleReset() {
-    setSettings(savedSettings);
-    setMessage("");
-    setError("");
-  }
-
   async function handleSave() {
-    if (saving || !hasChanges) {
-      return;
-    }
-
     try {
       setSaving(true);
       setMessage("");
@@ -251,21 +110,20 @@ export default function SettingsPage() {
         body: JSON.stringify(settings),
       });
 
-      const data = await response
-        .json()
-        .catch(() => null);
-
       if (!response.ok) {
+        const data = await response.json().catch(
+          () => null
+        );
+
         throw new Error(
-          data?.error || "Failed to save settings."
+          data?.error || "Failed to save settings"
         );
       }
 
-      const updatedSettings =
-        data as SettingsData;
+      const data =
+        (await response.json()) as SettingsData;
 
-      setSettings(updatedSettings);
-      setSavedSettings(updatedSettings);
+      setSettings(data);
       setMessage("Settings saved successfully.");
     } catch (err) {
       console.error(err);
@@ -281,270 +139,151 @@ export default function SettingsPage() {
   }
 
   if (loading) {
-    return <SettingsSkeleton />;
+    return (
+      <div className="py-12 text-center text-muted-foreground">
+        Loading settings...
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Header */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Settings className="h-4 w-4" />
-            <span>Dashboard</span>
-            <ChevronRight className="h-4 w-4" />
-            <span>Settings</span>
-          </div>
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+            Settings
+          </h1>
 
-          <div className="mt-4">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Settings
-            </h1>
-
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Configure your business, booking workflow,
-              notifications, and regional preferences.
-            </p>
-          </div>
+          <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+            Manage your booking platform settings.
+          </p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {hasChanges && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              disabled={saving}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset
-            </Button>
-          )}
-
-          <Button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || !hasChanges}
-            className="gap-2 bg-blue-600 text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
-          >
-            {saving ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4" />
-                Save Changes
-              </>
-            )}
-          </Button>
-        </div>
+        <Button
+          onClick={handleSave}
+          disabled={saving}
+          className="gap-2 bg-blue-600 text-white hover:bg-blue-700"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? "Saving..." : "Save Changes"}
+        </Button>
       </div>
 
-      {/* Save state */}
-      {(message || error || hasChanges) && (
-        <div
-          className={`flex flex-col gap-3 rounded-2xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between ${
-            error
-              ? "border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/20"
-              : message
-                ? "border-green-200 bg-green-50 dark:border-green-900/60 dark:bg-green-950/20"
-                : "border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/20"
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            {error ? (
-              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
-            ) : message ? (
-              <Check className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
-            ) : (
-              <CircleAlert className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-            )}
-
-            <div>
-              <p
-                className={`text-sm font-semibold ${
-                  error
-                    ? "text-red-700 dark:text-red-400"
-                    : message
-                      ? "text-green-700 dark:text-green-400"
-                      : "text-blue-700 dark:text-blue-400"
-                }`}
-              >
-                {error
-                  ? "Something went wrong"
-                  : message
-                    ? "All changes are saved"
-                    : "You have unsaved changes"}
-              </p>
-
-              <p
-                className={`mt-1 text-xs ${
-                  error
-                    ? "text-red-600/80 dark:text-red-400/80"
-                    : message
-                      ? "text-green-600/80 dark:text-green-400/80"
-                      : "text-blue-600/80 dark:text-blue-400/80"
-                }`}
-              >
-                {error ||
-                  message ||
-                  "Save your changes before leaving this page."}
-              </p>
-            </div>
-          </div>
-
-          {hasChanges && !error && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full bg-blue-600 hover:bg-blue-700 sm:w-auto"
-            >
-              {saving ? "Saving..." : "Save now"}
-            </Button>
-          )}
+      {message && (
+        <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-400">
+          {message}
         </div>
       )}
 
-      {/* Settings grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Business */}
-        <Card className="overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md">
-          <CardHeader className="border-b bg-muted/20">
-            <div className="flex items-start gap-4">
-              <SectionIcon>
-                <Building2 className="h-5 w-5" />
-              </SectionIcon>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400">
+          {error}
+        </div>
+      )}
 
-              <div className="min-w-0">
-                <CardTitle className="text-lg">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="rounded-2xl border-0 shadow-md">
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950">
+                <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+
+              <div>
+                <CardTitle>
                   Business Information
                 </CardTitle>
 
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                  Keep your business identity clear and
-                  consistent across the platform.
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Manage your business name and basic information.
                 </p>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-6">
+          <CardContent className="space-y-5">
             <div className="space-y-2">
-              <label
-                htmlFor="business-name"
-                className="text-sm font-semibold"
-              >
+              <label className="text-sm font-medium">
                 Business name
               </label>
 
               <Input
-                id="business-name"
                 value={settings.businessName}
                 onChange={(event) =>
                   updateSettings({
                     businessName: event.target.value,
                   })
                 }
-                placeholder="Enter your business name"
-                className="h-11 rounded-xl"
               />
-
-              <p className="text-xs leading-5 text-muted-foreground">
-                This is the primary name of your business.
-              </p>
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="business-type"
-                className="text-sm font-semibold"
-              >
+              <label className="text-sm font-medium">
                 Business type
               </label>
 
               <Input
-                id="business-type"
                 value={settings.businessType}
                 onChange={(event) =>
                   updateSettings({
                     businessType: event.target.value,
                   })
                 }
-                placeholder="e.g. Clinic, Salon, Consultant"
-                className="h-11 rounded-xl"
               />
-
-              <p className="text-xs leading-5 text-muted-foreground">
-                Describe the type of service your business
-                provides.
-              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Booking */}
-        <Card className="overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md">
-          <CardHeader className="border-b bg-muted/20">
+        <Card className="rounded-2xl border-0 shadow-md">
+          <CardHeader>
             <div className="flex items-start gap-4">
-              <SectionIcon>
-                <Settings className="h-5 w-5" />
-              </SectionIcon>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950">
+                <Settings className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
 
-              <div className="min-w-0">
-                <CardTitle className="text-lg">
+              <div>
+                <CardTitle>
                   Booking Settings
                 </CardTitle>
 
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                  Control how your appointment booking
-                  workflow behaves.
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Configure how customers can make appointments.
                 </p>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-6">
-            <SettingSwitch
-              checked={settings.bookingEnabled}
-              onChange={(checked) =>
-                updateSettings({
-                  bookingEnabled: checked,
-                })
-              }
-              title={
-                settings.bookingEnabled
-                  ? "Bookings are enabled"
-                  : "Bookings are disabled"
-              }
-              description={
-                settings.bookingEnabled
-                  ? "Customers can currently create new appointments."
-                  : "New appointments are currently blocked."
-              }
-            />
+          <CardContent className="space-y-5">
+            <label className="flex cursor-pointer items-center justify-between rounded-xl border p-4">
+              <div>
+                <p className="text-sm font-medium">
+                  Booking status
+                </p>
 
-            <div className="rounded-2xl border bg-muted/20 p-4">
-              <div className="mb-4">
-                <label
-                  htmlFor="default-status"
-                  className="text-sm font-semibold"
-                >
-                  Default appointment status
-                </label>
-
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  Choose the status assigned to newly created
-                  appointments.
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Allow customers to create bookings.
                 </p>
               </div>
 
+              <input
+                type="checkbox"
+                checked={settings.bookingEnabled}
+                onChange={(event) =>
+                  updateSettings({
+                    bookingEnabled:
+                      event.target.checked,
+                  })
+                }
+                className="h-5 w-5 accent-blue-600"
+              />
+            </label>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Default appointment status
+              </label>
+
               <select
-                id="default-status"
                 value={settings.defaultAppointmentStatus}
                 onChange={(event) =>
                   updateSettings({
@@ -552,136 +291,135 @@ export default function SettingsPage() {
                       event.target.value as AppointmentStatus,
                   })
                 }
-                className="h-11 w-full rounded-xl border border-slate-300 bg-background px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:focus:border-blue-500"
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
-                {appointmentStatusOptions.map(
-                  (option) => (
-                    <option
-                      key={option.value}
-                      value={option.value}
-                    >
-                      {option.label}
-                    </option>
-                  )
-                )}
-              </select>
+                <option value="PENDING">
+                  Pending
+                </option>
 
-              <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                {
-                  appointmentStatusOptions.find(
-                    (option) =>
-                      option.value ===
-                      settings.defaultAppointmentStatus
-                  )?.description
-                }
-              </p>
+                <option value="CONFIRMED">
+                  Confirmed
+                </option>
+
+                <option value="COMPLETED">
+                  Completed
+                </option>
+
+                <option value="CANCELLED">
+                  Cancelled
+                </option>
+              </select>
             </div>
           </CardContent>
         </Card>
 
-        {/* Notifications */}
-        <Card className="overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md">
-          <CardHeader className="border-b bg-muted/20">
+        <Card className="rounded-2xl border-0 shadow-md">
+          <CardHeader>
             <div className="flex items-start gap-4">
-              <SectionIcon>
-                <Bell className="h-5 w-5" />
-              </SectionIcon>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950">
+                <Bell className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
 
-              <div className="min-w-0">
-                <CardTitle className="text-lg">
+              <div>
+                <CardTitle>
                   Notifications
                 </CardTitle>
 
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                  Manage how booking activity notifications
-                  are handled.
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Control notifications related to your bookings.
                 </p>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-4 p-6">
-            <SettingSwitch
-              checked={settings.bookingNotifications}
-              onChange={(checked) =>
-                updateSettings({
-                  bookingNotifications: checked,
-                })
-              }
-              title="Booking notifications"
-              description="Receive notifications when a new booking is created."
-            />
+          <CardContent className="space-y-4">
+            <label className="flex cursor-pointer items-center justify-between rounded-xl border p-4">
+              <div>
+                <p className="text-sm font-medium">
+                  Booking notifications
+                </p>
 
-            <SettingSwitch
-              checked={settings.customerNotifications}
-              onChange={(checked) =>
-                updateSettings({
-                  customerNotifications: checked,
-                })
-              }
-              title="Customer notifications"
-              description="Enable notifications related to customer booking updates."
-            />
-
-            <div className="rounded-2xl border border-dashed bg-muted/20 p-4">
-              <div className="flex gap-3">
-                <Bell className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-
-                <div>
-                  <p className="text-sm font-medium">
-                    Notification preferences
-                  </p>
-
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    These settings control the notification
-                    preferences currently supported by your
-                    booking platform.
-                  </p>
-                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Notify when a new booking is created.
+                </p>
               </div>
-            </div>
+
+              <input
+                type="checkbox"
+                checked={
+                  settings.bookingNotifications
+                }
+                onChange={(event) =>
+                  updateSettings({
+                    bookingNotifications:
+                      event.target.checked,
+                  })
+                }
+                className="h-5 w-5 accent-blue-600"
+              />
+            </label>
+
+            <label className="flex cursor-pointer items-center justify-between rounded-xl border p-4">
+              <div>
+                <p className="text-sm font-medium">
+                  Customer notifications
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Notify customers about booking updates.
+                </p>
+              </div>
+
+              <input
+                type="checkbox"
+                checked={
+                  settings.customerNotifications
+                }
+                onChange={(event) =>
+                  updateSettings({
+                    customerNotifications:
+                      event.target.checked,
+                  })
+                }
+                className="h-5 w-5 accent-blue-600"
+              />
+            </label>
           </CardContent>
         </Card>
 
-        {/* Region */}
-        <Card className="overflow-hidden rounded-2xl border shadow-sm transition-shadow hover:shadow-md">
-          <CardHeader className="border-b bg-muted/20">
+        <Card className="rounded-2xl border-0 shadow-md">
+          <CardHeader>
             <div className="flex items-start gap-4">
-              <SectionIcon>
-                <Globe className="h-5 w-5" />
-              </SectionIcon>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-950">
+                <Globe className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
 
-              <div className="min-w-0">
-                <CardTitle className="text-lg">
+              <div>
+                <CardTitle>
                   Language & Region
                 </CardTitle>
 
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                  Choose the language and currency used by
-                  your platform.
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Manage language and regional preferences.
                 </p>
               </div>
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 p-6">
+          <CardContent className="space-y-5">
             <div className="space-y-2">
-              <label
-                htmlFor="language"
-                className="text-sm font-semibold"
-              >
+              <label className="text-sm font-medium">
                 Language
               </label>
 
               <select
-                id="language"
                 value={settings.language}
                 onChange={(event) =>
                   updateSettings({
                     language: event.target.value,
                   })
                 }
-                className="h-11 w-full rounded-xl border border-slate-300 bg-background px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:focus:border-blue-500"
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
                 <option value="English">
                   English
@@ -695,104 +433,52 @@ export default function SettingsPage() {
                   Pashto
                 </option>
               </select>
-
-              <p className="text-xs leading-5 text-muted-foreground">
-                Select the primary language for your
-                platform.
-              </p>
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="currency"
-                className="text-sm font-semibold"
-              >
+              <label className="text-sm font-medium">
                 Currency
               </label>
 
               <select
-                id="currency"
                 value={settings.currency}
                 onChange={(event) =>
                   updateSettings({
                     currency: event.target.value,
                   })
                 }
-                className="h-11 w-full rounded-xl border border-slate-300 bg-background px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:focus:border-blue-500"
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
                 <option value="USD">
-                  USD — US Dollar
+                  USD
                 </option>
 
                 <option value="EUR">
-                  EUR — Euro
+                  EUR
                 </option>
 
                 <option value="AFN">
-                  AFN — Afghan Afghani
+                  AFN
                 </option>
               </select>
-
-              <p className="text-xs leading-5 text-muted-foreground">
-                Used when displaying prices throughout the
-                booking platform.
-              </p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Bottom save bar */}
-      <div className="sticky bottom-4 z-10">
-        <div className="flex flex-col gap-4 rounded-2xl border bg-background/95 p-4 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold">
-              {hasChanges
-                ? "You have unsaved changes"
-                : "Everything is up to date"}
-            </p>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Availability
+          </h2>
 
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hasChanges
-                ? "Save your changes to apply the new configuration."
-                : "Your settings are synchronized with the server."}
-            </p>
-          </div>
-
-          <div className="flex w-full gap-2 sm:w-auto">
-            {hasChanges && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleReset}
-                disabled={saving}
-                className="flex-1 gap-2 sm:flex-none"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reset
-              </Button>
-            )}
-
-            <Button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !hasChanges}
-              className="flex-1 gap-2 bg-blue-600 text-white hover:bg-blue-700 sm:flex-none"
-            >
-              {saving ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Configure your weekly schedule, breaks, and blocked
+            dates.
+          </p>
         </div>
+
+        <AvailabilitySettings />
       </div>
     </div>
   );
