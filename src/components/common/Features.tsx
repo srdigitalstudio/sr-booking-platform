@@ -23,7 +23,7 @@ const features = [
     icon: Users,
     title: "Team Management",
     description:
-      "Manage staff members, working hours, vacations and availability from one place.",
+      "Manage staff members, working hours, vacations and availabilityfrom one place.",
   },
   {
     icon: CreditCard,
@@ -53,7 +53,7 @@ const features = [
 
 export function Features() {
   return (
-    <Section className="bg-slate-50">
+    <Section className="bg-slate-50 dark:bg-background">
       <SectionHeader
         badge="Features"
         title="Everything You Need"
@@ -61,18 +61,18 @@ export function Features() {
       />
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-       {features.map((feature, index) => (
-  <FadeIn
-    key={feature.title}
-    delay={index * 0.12}
-  >
-    <FeatureCard
-      icon={feature.icon}
-      title={feature.title}
-      description={feature.description}
-    />
-  </FadeIn>
-))}
+        {features.map((feature, index) => (
+          <FadeIn
+            key={feature.title}
+            delay={index * 0.12}
+          >
+            <FeatureCard
+              icon={feature.icon}
+              title={feature.title}
+              description={feature.description}
+            />
+          </FadeIn>
+        ))}
       </div>
     </Section>
   );

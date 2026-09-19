@@ -4,7 +4,7 @@ import { Container } from "@/components/layout/Container";
 
 export function Footer() {
   return (
-    <footer className="border-t bg-slate-50">
+    <footer className="border-t bg-slate-50 dark:border-slate-800 dark:bg-black">
       <Container>
         <div className="grid gap-12 py-16 md:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
@@ -41,7 +41,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#features"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Features
                 </Link>
@@ -50,7 +50,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#pricing"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Pricing
                 </Link>
@@ -59,7 +59,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#faq"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   FAQ
                 </Link>
@@ -68,7 +68,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Dashboard
                 </Link>
@@ -86,7 +86,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   About
                 </Link>
@@ -95,7 +95,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Contact
                 </Link>
@@ -104,7 +104,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Blog
                 </Link>
@@ -113,7 +113,7 @@ export function Footer() {
               <li>
                 <Link
                   href="#"
-                  className="transition-colors hover:text-blue-600"
+                  className="transition-colors hover:text-blue-600 dark:hover:text-blue-400"
                 >
                   Careers
                 </Link>

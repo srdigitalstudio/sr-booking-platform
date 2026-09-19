@@ -5,6 +5,7 @@ import { Logo } from "@/components/common/Logo";
 import { Button } from "@/components/ui/button";
 import { navigation } from "@/constants/navigation";
 import { Container } from "./Container";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export function Header() {
   return (
@@ -24,11 +25,15 @@ export function Header() {
           ))}
         </nav>
 
-        <Link href="/login">
-          <Button>
-            Sign In
-          </Button>
-        </Link>
+       <div className="flex items-center gap-2">
+  <ThemeToggle />
+
+  <Link href="/login">
+    <Button>
+      Sign In
+    </Button>
+  </Link>
+</div>
       </Container>
     </header>
   );
