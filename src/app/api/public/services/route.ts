@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
@@ -7,8 +6,14 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not configured.");
+}
+
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 const prisma =
@@ -23,32 +28,46 @@ if (process.env.NODE_ENV !== "production") {
 
 export async function GET() {
   try {
-    const services = await prisma.service.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        duration: true,
-        price: true,
-      },
-    });
+    const settings =
+      await prisma.settings.findFirst();
+
+    if (
+      settings &&
+      !settings.bookingEnabled
+    ) {
+      return NextResponse.json([]);
+    }
+
+    const services =
+      await prisma.service.findMany({
+        where: {
+          active: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          duration: true,
+          price: true,
+        },
+        orderBy: [
+          {
+            name: "asc",
+          },
+        ],
+      });
 
     return NextResponse.json(services);
   } catch (error) {
     console.error(
-      "Failed to load public services:",
+      "GET /api/public/services failed:",
       error
     );
 
     return NextResponse.json(
       {
-        error: "Failed to load services",
+        error:
+          "Unable to load available services.",
       },
       {
         status: 500,

@@ -1,16 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
   Check,
+  CheckCircle2,
   Clock3,
   Loader2,
+  Mail,
+  Phone,
+  ShieldCheck,
   Sparkles,
+  User,
 } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
@@ -23,48 +32,40 @@ type Service = {
   price: string | number | null;
 };
 
-type BusinessDayOfWeek =
-  | "SATURDAY"
-  | "SUNDAY"
-  | "MONDAY"
-  | "TUESDAY"
-  | "WEDNESDAY"
-  | "THURSDAY"
-  | "FRIDAY";
-
-type BusinessHour = {
-  id: string;
-  dayOfWeek: BusinessDayOfWeek;
-  isOpen: boolean;
-  startTime: string;
-  endTime: string;
+type AvailabilityResponse = {
+  available: boolean;
+  reason?: string;
+  slots: string[];
+  businessHours?: {
+    startTime: string;
+    endTime: string;
+  };
+  breaks?: {
+    id: string;
+    startTime: string;
+    endTime: string;
+    label: string | null;
+  }[];
 };
 
-type BusinessBreak = {
-  id: string;
-  dayOfWeek: BusinessDayOfWeek;
-  startTime: string;
-  endTime: string;
-  label: string | null;
-};
-
-type BlockedDate = {
-  id: string;
-  date: string;
-  reason: string | null;
-};
-
-type Appointment = {
-  id: string;
-  date: string;
-  time: string;
-  status:
-    | "PENDING"
-    | "CONFIRMED"
-    | "COMPLETED"
-    | "CANCELLED";
-  service: {
-    duration: number;
+type BookingResponse = {
+  success: boolean;
+  appointment: {
+    id: string;
+    date: string;
+    time: string;
+    status: string;
+    customer: {
+      name: string;
+      email: string | null;
+      phone: string | null;
+    };
+    service: {
+      id: string;
+      name: string;
+      duration: number;
+      price: string | null;
+    };
   };
 };
 
@@ -73,14 +74,14 @@ function formatPrice(price: Service["price"]) {
     return "Price on request";
   }
 
-  const numericPrice =
+  const numeric =
     typeof price === "number" ? price : Number(price);
 
-  if (!Number.isFinite(numericPrice)) {
+  if (!Number.isFinite(numeric)) {
     return "Price on request";
   }
 
-  return `$${numericPrice.toFixed(2)}`;
+  return `$${numeric.toFixed(2)}`;
 }
 
 function formatDate(dateString: string) {
@@ -97,268 +98,99 @@ function formatDate(dateString: string) {
 function getDateKey(date: Date) {
   const year = date.getFullYear();
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
 
-  const day = String(date.getDate()).padStart(
-    2,
-    "0"
-  );
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
 
-function getDayOfWeek(
-  dateString: string
-): BusinessDayOfWeek {
-  const date = new Date(`${dateString}T00:00:00`);
-
-  const days: BusinessDayOfWeek[] = [
-    "SUNDAY",
-    "MONDAY",
-    "TUESDAY",
-    "WEDNESDAY",
-    "THURSDAY",
-    "FRIDAY",
-    "SATURDAY",
-  ];
-
-  return days[date.getDay()];
+function isValidEmail(email: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function timeToMinutes(time: string) {
-  const [hours, minutes] = time
-    .split(":")
-    .map(Number);
+function isValidPhone(phone: string) {
+  const normalized = phone.replace(/[\s\-().+]/g, "");
 
-  return hours * 60 + minutes;
-}
-
-function minutesToTime(totalMinutes: number) {
-  const hours = Math.floor(
-    totalMinutes / 60
-  );
-
-  const minutes = totalMinutes % 60;
-
-  return `${String(hours).padStart(2, "0")}:${String(
-    minutes
-  ).padStart(2, "0")}`;
-}
-
-function generateTimeSlots(
-  startTime: string,
-  endTime: string,
-  duration: number,
-  breaks: BusinessBreak[],
-  appointments: Appointment[]
-) {
-  const slots: string[] = [];
-
-  const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
-
-  if (
-    !Number.isFinite(start) ||
-    !Number.isFinite(end) ||
-    !Number.isFinite(duration) ||
-    duration <= 0 ||
-    start >= end
-  ) {
-    return slots;
-  }
-
-  for (
-    let current = start;
-    current + duration <= end;
-    current += 30
-  ) {
-    const slotEnd = current + duration;
-
-    const overlapsBreak = breaks.some(
-      (businessBreak) => {
-        const breakStart = timeToMinutes(
-          businessBreak.startTime
-        );
-
-        const breakEnd = timeToMinutes(
-          businessBreak.endTime
-        );
-
-        return (
-          current < breakEnd &&
-          slotEnd > breakStart
-        );
-      }
-    );
-
-    if (overlapsBreak) {
-      continue;
-    }
-
-    const overlapsAppointment =
-      appointments.some((appointment) => {
-        if (
-          appointment.status === "CANCELLED"
-        ) {
-          return false;
-        }
-
-        const appointmentStart =
-          timeToMinutes(
-            appointment.time
-          );
-
-        const appointmentDuration =
-          appointment.service?.duration ?? 0;
-
-        const appointmentEnd =
-          appointmentStart +
-          appointmentDuration;
-
-        return (
-          current < appointmentEnd &&
-          slotEnd > appointmentStart
-        );
-      });
-
-    if (!overlapsAppointment) {
-      slots.push(
-        minutesToTime(current)
-      );
-    }
-  }
-
-  return slots;
+  return /^\d{7,15}$/.test(normalized);
 }
 
 export default function BookingPage() {
-  const [services, setServices] = useState<
-    Service[]
-  >([]);
+  const [services, setServices] = useState<Service[]>([]);
 
-  const [businessHours, setBusinessHours] =
-    useState<BusinessHour[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [businessBreaks, setBusinessBreaks] =
-    useState<BusinessBreak[]>([]);
-
-  const [blockedDates, setBlockedDates] =
-    useState<BlockedDate[]>([]);
-
-  const [appointments, setAppointments] =
-    useState<Appointment[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [scheduleLoading, setScheduleLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState("");
-
-  const [scheduleError, setScheduleError] =
-    useState("");
+  const [error, setError] = useState("");
 
   const [selectedService, setSelectedService] =
     useState<Service | null>(null);
 
-  const [selectedDate, setSelectedDate] =
+  const [selectedDate, setSelectedDate] = useState("");
+
+  const [selectedTime, setSelectedTime] = useState("");
+
+  const [availability, setAvailability] =
+    useState<AvailabilityResponse | null>(null);
+
+  const [availabilityLoading, setAvailabilityLoading] =
+    useState(false);
+
+  const [availabilityError, setAvailabilityError] =
     useState("");
 
-  const [selectedTime, setSelectedTime] =
-    useState("");
+  const [customerName, setCustomerName] = useState("");
+
+  const [customerEmail, setCustomerEmail] = useState("");
+
+  const [customerPhone, setCustomerPhone] = useState("");
+
+  const [notes, setNotes] = useState("");
+
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
+  const [bookingLoading, setBookingLoading] = useState(false);
+
+  const [bookingError, setBookingError] = useState("");
+
+  const [bookingSuccess, setBookingSuccess] =
+    useState<BookingResponse | null>(null);
+
+  const today = useMemo(
+    () => getDateKey(new Date()),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadInitialData() {
+    async function loadServices() {
       try {
         setLoading(true);
         setError("");
 
-        const [
-          servicesResponse,
-          hoursResponse,
-          breaksResponse,
-          blockedResponse,
-        ] = await Promise.all([
-          fetch("/api/public/services", {
-            method: "GET",
+        const response = await fetch(
+          "/api/public/services",
+          {
             cache: "no-store",
-          }),
-          fetch("/api/business-hours", {
-            method: "GET",
-            cache: "no-store",
-          }),
-          fetch("/api/business-breaks", {
-            method: "GET",
-            cache: "no-store",
-          }),
-          fetch("/api/blocked-dates", {
-            method: "GET",
-            cache: "no-store",
-          }),
-        ]);
+          }
+        );
 
-        const servicesData =
-          await servicesResponse.json();
+        const data = await response.json();
 
-        if (!servicesResponse.ok) {
+        if (!response.ok) {
           throw new Error(
-            servicesData?.error ||
-              "Failed to load services."
+            data?.error || "Unable to load services."
           );
         }
 
-        if (!Array.isArray(servicesData)) {
+        if (!Array.isArray(data)) {
           throw new Error(
             "Invalid services response."
           );
         }
 
-        const hoursData =
-          await hoursResponse.json();
-
-        const breaksData =
-          await breaksResponse.json();
-
-        const blockedData =
-          await blockedResponse.json();
-
-        if (cancelled) {
-          return;
-        }
-
-        setServices(servicesData);
-
-        if (
-          hoursResponse.ok &&
-          Array.isArray(hoursData)
-        ) {
-          setBusinessHours(hoursData);
-        } else {
-          setBusinessHours([]);
-        }
-
-        if (
-          breaksResponse.ok &&
-          Array.isArray(breaksData)
-        ) {
-          setBusinessBreaks(breaksData);
-        } else {
-          setBusinessBreaks([]);
-        }
-
-        if (
-          blockedResponse.ok &&
-          Array.isArray(blockedData)
-        ) {
-          setBlockedDates(blockedData);
-        } else {
-          setBlockedDates([]);
+        if (!cancelled) {
+          setServices(data);
         }
       } catch (error) {
         if (cancelled) {
@@ -366,14 +198,14 @@ export default function BookingPage() {
         }
 
         console.error(
-          "Failed to load booking data:",
+          "Failed to load services:",
           error
         );
 
         setError(
           error instanceof Error
             ? error.message
-            : "Failed to load booking data."
+            : "Unable to load services."
         );
       } finally {
         if (!cancelled) {
@@ -382,7 +214,7 @@ export default function BookingPage() {
       }
     }
 
-    loadInitialData();
+    loadServices();
 
     return () => {
       cancelled = true;
@@ -392,46 +224,40 @@ export default function BookingPage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAppointments() {
-      if (!selectedDate) {
-        setAppointments([]);
-        setScheduleLoading(false);
-        setScheduleError("");
+    async function loadAvailability() {
+      if (!selectedService || !selectedDate) {
+        setAvailability(null);
+        setSelectedTime("");
         return;
       }
 
       try {
-        setScheduleLoading(true);
-        setScheduleError("");
+        setAvailabilityLoading(true);
+        setAvailabilityError("");
         setSelectedTime("");
 
         const response = await fetch(
-          `/api/public/appointments?date=${encodeURIComponent(
+          `/api/public/availability?date=${encodeURIComponent(
             selectedDate
+          )}&serviceId=${encodeURIComponent(
+            selectedService.id
           )}`,
           {
-            method: "GET",
             cache: "no-store",
           }
         );
 
-        if (!response.ok) {
-          if (!cancelled) {
-            setAppointments([]);
-            setScheduleError(
-              "Unable to load available times."
-            );
-          }
-
-          return;
-        }
-
         const data = await response.json();
 
-        if (!cancelled) {
-          setAppointments(
-            Array.isArray(data) ? data : []
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Unable to load available times."
           );
+        }
+
+        if (!cancelled) {
+          setAvailability(data);
         }
       } catch (error) {
         if (cancelled) {
@@ -439,99 +265,201 @@ export default function BookingPage() {
         }
 
         console.error(
-          "Failed to load appointments:",
+          "Failed to load availability:",
           error
         );
 
-        setAppointments([]);
-        setScheduleError(
-          "Unable to load available times."
+        setAvailability(null);
+
+        setAvailabilityError(
+          error instanceof Error
+            ? error.message
+            : "Unable to load available times."
         );
       } finally {
         if (!cancelled) {
-          setScheduleLoading(false);
+          setAvailabilityLoading(false);
         }
       }
     }
 
-    loadAppointments();
+    loadAvailability();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
-
-  const today = useMemo(
-    () => getDateKey(new Date()),
-    []
-  );
-
-  const selectedDayOfWeek = selectedDate
-    ? getDayOfWeek(selectedDate)
-    : null;
-
-  const selectedBusinessHour =
-    selectedDayOfWeek
-      ? businessHours.find(
-          (businessHour) =>
-            businessHour.dayOfWeek ===
-            selectedDayOfWeek
-        )
-      : null;
-
-  const selectedBreaks =
-    selectedDayOfWeek
-      ? businessBreaks.filter(
-          (businessBreak) =>
-            businessBreak.dayOfWeek ===
-            selectedDayOfWeek
-        )
-      : [];
-
-  const blockedDate =
-    selectedDate
-      ? blockedDates.find(
-          (item) =>
-            item.date.slice(0, 10) ===
-            selectedDate
-        )
-      : undefined;
-
-  const isBlockedDate =
-    Boolean(blockedDate);
-
-  const availableTimeSlots =
-    selectedService &&
-    selectedBusinessHour?.isOpen &&
-    !isBlockedDate &&
-    !scheduleLoading
-      ? generateTimeSlots(
-          selectedBusinessHour.startTime,
-          selectedBusinessHour.endTime,
-          selectedService.duration,
-          selectedBreaks,
-          appointments
-        )
-      : [];
+  }, [selectedDate, selectedService]);
 
   function selectService(service: Service) {
     setSelectedService(service);
     setSelectedDate("");
     setSelectedTime("");
-    setAppointments([]);
-    setScheduleError("");
+    setAvailability(null);
+    setAvailabilityError("");
+    setBookingError("");
+    setBookingSuccess(null);
+    setTermsAccepted(false);
   }
+
+  function changeService() {
+    setSelectedService(null);
+    setSelectedDate("");
+    setSelectedTime("");
+    setAvailability(null);
+    setAvailabilityError("");
+    setBookingError("");
+    setTermsAccepted(false);
+
+    window.scrollTo({
+      top: 500,
+      behavior: "smooth",
+    });
+  }
+
+  function resetBooking() {
+    setSelectedService(null);
+    setSelectedDate("");
+    setSelectedTime("");
+    setAvailability(null);
+    setCustomerName("");
+    setCustomerEmail("");
+    setCustomerPhone("");
+    setNotes("");
+    setTermsAccepted(false);
+    setBookingError("");
+    setBookingSuccess(null);
+  }
+
+  async function submitBooking() {
+    if (
+      !selectedService ||
+      !selectedDate ||
+      !selectedTime
+    ) {
+      return;
+    }
+
+    const trimmedName = customerName.trim();
+    const trimmedEmail = customerEmail.trim();
+    const trimmedPhone = customerPhone.trim();
+    const trimmedNotes = notes.trim();
+
+    if (!trimmedName) {
+      setBookingError("Please enter your full name.");
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      setBookingError(
+        "Please enter a valid full name."
+      );
+      return;
+    }
+
+    if (
+      trimmedEmail &&
+      !isValidEmail(trimmedEmail)
+    ) {
+      setBookingError(
+        "Please enter a valid email address."
+      );
+      return;
+    }
+
+    if (
+      trimmedPhone &&
+      !isValidPhone(trimmedPhone)
+    ) {
+      setBookingError(
+        "Please enter a valid phone number."
+      );
+      return;
+    }
+
+    if (!termsAccepted) {
+      setBookingError(
+        "Please accept the booking terms before continuing."
+      );
+      return;
+    }
+
+    try {
+      setBookingLoading(true);
+      setBookingError("");
+
+      const response = await fetch(
+        "/api/public/appointments",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: trimmedName,
+            email: trimmedEmail,
+            phone: trimmedPhone,
+            serviceId: selectedService.id,
+            date: selectedDate,
+            time: selectedTime,
+            notes: trimmedNotes,
+          }),
+        }
+      );
+
+      const data =
+        (await response.json()) as
+          | BookingResponse
+          | {
+              error?: string;
+            };
+
+      if (!response.ok) {
+        throw new Error(
+          "error" in data
+            ? data.error ||
+                "Unable to create booking."
+            : "Unable to create booking."
+        );
+      }
+
+      setBookingSuccess(
+        data as BookingResponse
+      );
+    } catch (error) {
+      console.error(
+        "Booking failed:",
+        error
+      );
+
+      setBookingError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create booking."
+      );
+    } finally {
+      setBookingLoading(false);
+    }
+  }
+
+  const currentStep = bookingSuccess
+    ? 4
+    : selectedService &&
+        selectedDate &&
+        selectedTime
+      ? 3
+      : selectedService
+        ? 2
+        : 1;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
             href="/"
             className="group flex items-center gap-2 text-sm font-semibold"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-sm font-bold text-white shadow-sm transition-transform duration-200 group-hover:scale-105">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-sm transition-transform group-hover:scale-105">
               SR
             </span>
 
@@ -548,13 +476,15 @@ export default function BookingPage() {
               className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to home
+
+              <span className="hidden sm:inline">
+                Back to home
+              </span>
             </Link>
           </div>
         </div>
       </header>
 
-      {/* Hero */}
       <section className="relative overflow-hidden border-b border-border/60 bg-gradient-to-b from-blue-50 via-background to-background dark:from-blue-950/30 dark:via-background dark:to-background">
         <div className="absolute left-1/2 top-0 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/4 rounded-full bg-blue-200/30 blur-3xl dark:bg-blue-600/10" />
 
@@ -570,535 +500,822 @@ export default function BookingPage() {
             </h1>
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Choose a service and select a
-              convenient date and time.
+              Choose a service, find a convenient
+              time, and confirm your appointment
+              in just a few steps.
             </p>
           </div>
 
-          {/* Booking steps */}
-          <div className="mx-auto mt-10 flex max-w-2xl items-center justify-center">
-            <div className="flex w-full items-center justify-center">
-              <div
-                className={[
-                  "flex items-center gap-3",
-                  selectedService
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "",
-                ].join(" ")}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white shadow-sm">
-                  {selectedService ? (
-                    <Check className="h-4 w-4" />
-                  ) : (
-                    "1"
-                  )}
-                </div>
+          <div className="mx-auto mt-10 flex max-w-3xl items-center justify-center">
+            {[
+              ["1", "Service"],
+              ["2", "Date & time"],
+              ["3", "Your details"],
+              ["4", "Complete"],
+            ].map(([number, label], index) => {
+              const step = index + 1;
 
-                <span className="text-sm font-semibold">
-                  Service
-                </span>
-              </div>
+              const active =
+                currentStep >= step;
 
-              <div className="mx-3 h-px w-12 bg-border sm:mx-5 sm:w-20" />
+              const complete =
+                currentStep > step;
 
-              <div
-                className={[
-                  "flex items-center gap-3",
-                  selectedService
-                    ? "text-foreground"
-                    : "text-muted-foreground",
-                ].join(" ")}
-              >
+              return (
                 <div
-                  className={[
-                    "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
-                    selectedService
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "border border-border bg-muted/40",
-                  ].join(" ")}
+                  key={number}
+                  className="flex items-center"
                 >
-                  2
-                </div>
-
-                <span className="hidden text-sm font-medium sm:inline">
-                  Date & time
-                </span>
-              </div>
-
-              <div className="mx-3 h-px w-12 bg-border sm:mx-5 sm:w-20" />
-
-              <div className="flex items-center gap-3 text-muted-foreground">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/40 text-sm font-semibold">
-                  3
-                </div>
-
-                <span className="hidden text-sm font-medium sm:inline">
-                  Details
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Services */}
-      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
-        <div className="mb-8">
-          <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-            Step 1
-          </p>
-
-          <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-            Select a service
-          </h2>
-
-          <p className="mt-2 text-sm text-muted-foreground">
-            Choose the service you&apos;d like to
-            book.
-          </p>
-        </div>
-
-        {/* Loading */}
-        {loading && (
-          <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-border bg-card shadow-md">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-              Loading available services...
-            </div>
-          </div>
-        )}
-
-        {/* Error */}
-        {!loading && error && (
-          <div className="mx-auto max-w-xl rounded-2xl border border-destructive/20 bg-destructive/5 p-8 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-
-            <h2 className="mt-4 text-lg font-semibold">
-              Unable to load services
-            </h2>
-
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              {error}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => {
-                window.location.reload();
-              }}
-              className="mt-6 inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {/* Empty */}
-        {!loading &&
-          !error &&
-          services.length === 0 && (
-            <div className="rounded-2xl border border-border bg-card p-10 text-center shadow-md">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                <CalendarDays className="h-6 w-6" />
-              </div>
-
-              <h2 className="mt-4 text-lg font-semibold">
-                No services available
-              </h2>
-
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-                There are currently no active
-                services available for booking.
-              </p>
-            </div>
-          )}
-
-        {/* Service cards */}
-        {!loading &&
-          !error &&
-          services.length > 0 && (
-            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {services.map((service) => {
-                const selected =
-                  selectedService?.id === service.id;
-
-                return (
-                  <button
-                    key={service.id}
-                    type="button"
-                    onClick={() =>
-                      selectService(service)
-                    }
+                  <div
                     className={[
-                      "group relative flex min-h-[250px] flex-col overflow-hidden rounded-2xl border border-border bg-card p-6 text-left shadow-md",
-                      "transition-all duration-300",
-                      "hover:-translate-y-1 hover:shadow-xl",
-                      selected
-                        ? "border-blue-500 ring-2 ring-blue-500/20 shadow-xl"
-                        : "",
+                      "flex items-center gap-2",
+                      active
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-muted-foreground",
                     ].join(" ")}
                   >
-                    {selected && (
-                      <div className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm">
-                        <Check className="h-4 w-4" />
-                      </div>
-                    )}
-
                     <div
                       className={[
-                        "flex h-14 w-14 items-center justify-center rounded-2xl",
-                        "bg-blue-100 text-blue-600",
-                        "transition-all duration-300",
-                        "group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white",
-                        "dark:bg-blue-950 dark:text-blue-400",
-                        "dark:group-hover:bg-blue-600 dark:group-hover:text-white",
+                        "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
+                        active
+                          ? "bg-blue-600 text-white"
+                          : "border border-border bg-muted/40",
                       ].join(" ")}
                     >
-                      <CalendarDays className="h-7 w-7" />
-                    </div>
-
-                    <h3 className="mt-5 text-xl font-semibold tracking-tight">
-                      {service.name}
-                    </h3>
-
-                    <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
-                      {service.description ||
-                        "Professional service with a convenient appointment experience."}
-                    </p>
-
-                    <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                        <Clock3 className="h-4 w-4" />
-
-                        <span>
-                          {service.duration} min
-                        </span>
-                      </div>
-
-                      <span className="text-base font-bold">
-                        {formatPrice(service.price)}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-      </section>
-
-      {/* Date & time */}
-      {selectedService && (
-        <section className="border-t border-border/60 bg-muted/20">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
-            <div className="mb-8">
-              <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                Step 2
-              </p>
-
-              <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
-                Choose date & time
-              </h2>
-
-              <p className="mt-2 text-sm text-muted-foreground">
-                Select a date and an available time
-                for {selectedService.name}.
-              </p>
-            </div>
-
-            <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
-              {/* Date */}
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
-                    <CalendarDays className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold">
-                      Select a date
-                    </h3>
-
-                    <p className="text-sm text-muted-foreground">
-                      Pick your preferred day.
-                    </p>
-                  </div>
-                </div>
-
-                <input
-                  type="date"
-                  min={today}
-                  value={selectedDate}
-                  onChange={(event) => {
-                    setSelectedDate(
-                      event.target.value
-                    );
-                    setSelectedTime("");
-                  }}
-                  className="mt-6 h-12 w-full rounded-xl border border-border bg-background px-4 text-sm font-medium outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-
-                {selectedDate && (
-                  <div className="mt-5 rounded-xl bg-muted/50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Selected date
-                    </p>
-
-                    <p className="mt-1 font-semibold">
-                      {formatDate(selectedDate)}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Time */}
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
-                    <Clock3 className="h-5 w-5" />
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold">
-                      Available times
-                    </h3>
-
-                    <p className="text-sm text-muted-foreground">
-                      Times are based on business
-                      hours and existing bookings.
-                    </p>
-                  </div>
-                </div>
-
-                {!selectedDate && (
-                  <div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center">
-                    <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
-
-                    <p className="mt-3 text-sm font-medium">
-                      Select a date first
-                    </p>
-
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Available appointment times
-                      will appear here.
-                    </p>
-                  </div>
-                )}
-
-                {selectedDate &&
-                  isBlockedDate && (
-                    <div className="mt-6 rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
-                      <p className="font-semibold">
-                        This date is unavailable
-                      </p>
-
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {blockedDate?.reason ||
-                          "This date is blocked for bookings."}
-                      </p>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  selectedBusinessHour &&
-                  !selectedBusinessHour.isOpen && (
-                    <div className="mt-6 rounded-xl border border-border bg-muted/40 p-6 text-center">
-                      <p className="font-semibold">
-                        We are closed on this day
-                      </p>
-
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Please choose another date.
-                      </p>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  !selectedBusinessHour && (
-                    <div className="mt-6 rounded-xl border border-border bg-muted/40 p-6 text-center">
-                      <p className="font-semibold">
-                        Schedule unavailable
-                      </p>
-
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Business hours have not been
-                        configured for this day.
-                      </p>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  selectedBusinessHour?.isOpen &&
-                  scheduleLoading && (
-                    <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-xl border border-border bg-muted/20">
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin text-blue-600 dark:text-blue-400" />
-                        Checking available times...
-                      </div>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  selectedBusinessHour?.isOpen &&
-                  !scheduleLoading &&
-                  scheduleError && (
-                    <div className="mt-6 rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
-                      <p className="font-semibold">
-                        Unable to load times
-                      </p>
-
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {scheduleError}
-                      </p>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  selectedBusinessHour?.isOpen &&
-                  !scheduleLoading &&
-                  !scheduleError &&
-                  availableTimeSlots.length ===
-                    0 && (
-                    <div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center">
-                      <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
-
-                      <p className="mt-3 font-semibold">
-                        No available times
-                      </p>
-
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        There are no available
-                        appointment times for this
-                        date.
-                      </p>
-                    </div>
-                  )}
-
-                {selectedDate &&
-                  !isBlockedDate &&
-                  selectedBusinessHour?.isOpen &&
-                  !scheduleLoading &&
-                  !scheduleError &&
-                  availableTimeSlots.length >
-                    0 && (
-                    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                      {availableTimeSlots.map(
-                        (time) => {
-                          const selected =
-                            selectedTime === time;
-
-                          return (
-                            <button
-                              key={time}
-                              type="button"
-                              onClick={() =>
-                                setSelectedTime(
-                                  time
-                                )
-                              }
-                              className={[
-                                "inline-flex h-12 items-center justify-center rounded-xl border text-sm font-semibold transition-all duration-200",
-                                selected
-                                  ? "border-blue-600 bg-blue-600 text-white shadow-md"
-                                  : "border-border bg-background hover:-translate-y-0.5 hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40",
-                              ].join(" ")}
-                            >
-                              <Clock3 className="mr-2 h-4 w-4" />
-                              {time}
-                            </button>
-                          );
-                        }
+                      {complete ? (
+                        <Check className="h-4 w-4" />
+                      ) : (
+                        number
                       )}
                     </div>
+
+                    <span className="hidden text-sm font-medium md:inline">
+                      {label}
+                    </span>
+                  </div>
+
+                  {index < 3 && (
+                    <div className="mx-2 h-px w-5 bg-border sm:mx-4 sm:w-10 lg:w-16" />
                   )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-                {selectedDate &&
-                  selectedBusinessHour?.isOpen &&
-                  selectedBreaks.length > 0 && (
-                    <p className="mt-5 text-xs text-muted-foreground">
-                      Break times are automatically
-                      excluded from available slots.
-                    </p>
-                  )}
+      {bookingSuccess ? (
+        <section className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
+          <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-lg sm:p-12">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-green-600 dark:bg-green-950/50 dark:text-green-400">
+              <CheckCircle2 className="h-9 w-9" />
+            </div>
 
-                {selectedDate &&
-                  selectedBusinessHour?.isOpen && (
-                    <div className="mt-6 rounded-xl bg-muted/50 p-4">
-                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Business hours
-                      </p>
+            <p className="mt-6 text-sm font-semibold text-green-600 dark:text-green-400">
+              Booking confirmed
+            </p>
 
-                      <p className="mt-1 text-sm font-semibold">
-                        {
-                          selectedBusinessHour.startTime
-                        }{" "}
-                        –{" "}
-                        {
-                          selectedBusinessHour.endTime
-                        }
-                      </p>
+            <h2 className="mt-2 text-3xl font-bold tracking-tight">
+              Your appointment is booked
+            </h2>
 
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Service duration:{" "}
-                        {selectedService.duration}{" "}
-                        minutes
-                      </p>
-                    </div>
-                  )}
+            <p className="mx-auto mt-4 max-w-lg text-sm leading-6 text-muted-foreground">
+              Thank you,{" "}
+              {bookingSuccess.appointment.customer.name}.
+              Your appointment details are below.
+            </p>
+
+            <div className="mt-8 grid gap-3 text-left sm:grid-cols-2">
+              <div className="rounded-2xl bg-muted/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Service
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {
+                    bookingSuccess.appointment
+                      .service.name
+                  }
+                </p>
               </div>
+
+              <div className="rounded-2xl bg-muted/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Date
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {formatDate(
+                    bookingSuccess.appointment.date
+                  )}
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-muted/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Time
+                </p>
+
+                <p className="mt-1 font-semibold">
+                  {
+                    bookingSuccess.appointment
+                      .time
+                  }
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-muted/50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Status
+                </p>
+
+                <p className="mt-1 font-semibold capitalize">
+                  {bookingSuccess.appointment.status.toLowerCase()}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Link
+                href="/"
+                className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Back to home
+              </Link>
+
+              <button
+                type="button"
+                onClick={resetBooking}
+                className="inline-flex h-11 items-center justify-center rounded-xl border border-border bg-background px-5 text-sm font-semibold transition hover:bg-muted"
+              >
+                Book another appointment
+              </button>
             </div>
           </div>
         </section>
-      )}
-
-      {/* Selection footer */}
-      {selectedService && (
-        <div className="sticky bottom-0 z-40 border-t border-border/60 bg-background/90 py-4 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-            <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Your selection
-              </p>
-
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="font-semibold">
-                  {selectedService.name}
+      ) : (
+        <>
+          <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                  Step 1
                 </p>
 
-                <span className="text-sm text-muted-foreground">
-                  {selectedService.duration} min
-                </span>
+                <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                  Select a service
+                </h2>
 
-                {selectedDate && (
-                  <span className="text-sm text-muted-foreground">
-                    {formatDate(selectedDate)}
-                  </span>
-                )}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Choose the service that best matches
+                  what you need.
+                </p>
+              </div>
 
-                {selectedTime && (
-                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                    {selectedTime}
-                  </span>
-                )}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 text-green-500" />
+                Secure booking
               </div>
             </div>
 
-            <button
-              type="button"
-              disabled={!selectedDate || !selectedTime}
-              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
-            >
-              Continue
-              <ArrowRight className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
+            {loading && (
+              <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-border bg-card shadow-md">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                  Loading available services...
+                </div>
+              </div>
+            )}
+
+            {!loading && error && (
+              <div className="rounded-2xl border border-destructive/20 bg-destructive/5 p-8 text-center">
+                <h2 className="text-lg font-semibold">
+                  Unable to load services
+                </h2>
+
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {error}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.location.reload()
+                  }
+                  className="mt-5 inline-flex h-10 items-center justify-center rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+
+            {!loading &&
+              !error &&
+              services.length === 0 && (
+                <div className="rounded-2xl border border-border bg-card p-10 text-center">
+                  <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
+
+                  <h2 className="mt-4 text-lg font-semibold">
+                    No services available
+                  </h2>
+
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    There are currently no active
+                    services available for booking.
+                  </p>
+                </div>
+              )}
+
+            {!loading &&
+              !error &&
+              services.length > 0 && (
+                <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+                  {services.map((service) => {
+                    const selected =
+                      selectedService?.id ===
+                      service.id;
+
+                    return (
+                      <button
+                        key={service.id}
+                        type="button"
+                        onClick={() =>
+                          selectService(service)
+                        }
+                        className={[
+                          "group relative flex min-h-[250px] flex-col overflow-hidden rounded-2xl border bg-card p-6 text-left shadow-md transition-all duration-300 hover:-translate-y-1 hover:shadow-xl",
+                          selected
+                            ? "border-blue-500 ring-2 ring-blue-500/20"
+                            : "border-border",
+                        ].join(" ")}
+                      >
+                        {selected && (
+                          <div className="absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white">
+                            <Check className="h-4 w-4" />
+                          </div>
+                        )}
+
+                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 transition group-hover:scale-110 dark:bg-blue-950 dark:text-blue-400">
+                          <CalendarDays className="h-7 w-7" />
+                        </div>
+
+                        <h3 className="mt-5 text-xl font-semibold">
+                          {service.name}
+                        </h3>
+
+                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-muted-foreground">
+                          {service.description ||
+                            "Professional service with a convenient appointment experience."}
+                        </p>
+
+                        <div className="mt-auto flex items-end justify-between gap-4 pt-6">
+                          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <Clock3 className="h-4 w-4" />
+                            {service.duration} min
+                          </div>
+
+                          <span className="font-bold">
+                            {formatPrice(
+                              service.price
+                            )}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+          </section>
+
+          {selectedService && (
+            <>
+              <section className="border-t border-border/60 bg-muted/20">
+                <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+                  <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        Step 2
+                      </p>
+
+                      <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                        Choose date & time
+                      </h2>
+
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Select an available date and
+                        appointment time.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={changeService}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold transition hover:bg-muted"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Change service
+                    </button>
+                  </div>
+
+                  <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
+                    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                          <CalendarDays className="h-5 w-5" />
+                        </div>
+
+                        <div>
+                          <h3 className="font-semibold">
+                            Select a date
+                          </h3>
+
+                          <p className="text-sm text-muted-foreground">
+                            Pick your preferred day.
+                          </p>
+                        </div>
+                      </div>
+
+                      <input
+                        type="date"
+                        min={today}
+                        value={selectedDate}
+                        onChange={(event) => {
+                          setSelectedDate(
+                            event.target.value
+                          );
+                          setSelectedTime("");
+                          setAvailability(null);
+                          setAvailabilityError("");
+                        }}
+                        className="mt-6 h-12 w-full rounded-xl border border-border bg-background px-4 text-sm font-medium outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+
+                      {selectedDate && (
+                        <div className="mt-5 rounded-xl bg-muted/50 p-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Selected date
+                          </p>
+
+                          <p className="mt-1 font-semibold">
+                            {formatDate(
+                              selectedDate
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+                          <Clock3 className="h-5 w-5" />
+                        </div>
+
+                        <div>
+                          <h3 className="font-semibold">
+                            Available times
+                          </h3>
+
+                          <p className="text-sm text-muted-foreground">
+                            Available times are
+                            calculated from your
+                            schedule.
+                          </p>
+                        </div>
+                      </div>
+
+                      {!selectedDate && (
+                        <div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center">
+                          <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground" />
+
+                          <p className="mt-3 font-medium">
+                            Select a date first
+                          </p>
+                        </div>
+                      )}
+
+                      {selectedDate &&
+                        availabilityLoading && (
+                          <div className="mt-6 flex min-h-[180px] items-center justify-center rounded-xl border border-border">
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                              Checking available times...
+                            </div>
+                          </div>
+                        )}
+
+                      {selectedDate &&
+                        !availabilityLoading &&
+                        availabilityError && (
+                          <div className="mt-6 rounded-xl border border-destructive/20 bg-destructive/5 p-6 text-center">
+                            <p className="font-semibold">
+                              Unable to load times
+                            </p>
+
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {availabilityError}
+                            </p>
+                          </div>
+                        )}
+
+                      {selectedDate &&
+                        !availabilityLoading &&
+                        !availabilityError &&
+                        availability &&
+                        !availability.available && (
+                          <div className="mt-6 rounded-xl border border-border bg-muted/40 p-6 text-center">
+                            <p className="font-semibold">
+                              No booking available
+                            </p>
+
+                            <p className="mt-2 text-sm text-muted-foreground">
+                              {availability.reason}
+                            </p>
+                          </div>
+                        )}
+
+                      {selectedDate &&
+                        !availabilityLoading &&
+                        !availabilityError &&
+                        availability?.available &&
+                        availability.slots.length ===
+                          0 && (
+                          <div className="mt-6 rounded-xl border border-dashed border-border p-8 text-center">
+                            <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
+
+                            <p className="mt-3 font-semibold">
+                              No available times
+                            </p>
+
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Please choose another
+                              date.
+                            </p>
+                          </div>
+                        )}
+
+                      {selectedDate &&
+                        !availabilityLoading &&
+                        !availabilityError &&
+                        availability?.available &&
+                        availability.slots.length > 0 && (
+                          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                            {availability.slots.map(
+                              (time) => {
+                                const selected =
+                                  selectedTime ===
+                                  time;
+
+                                return (
+                                  <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedTime(
+                                        time
+                                      )
+                                    }
+                                    className={[
+                                      "inline-flex h-12 items-center justify-center rounded-xl border text-sm font-semibold transition-all",
+                                      selected
+                                        ? "border-blue-600 bg-blue-600 text-white shadow-md"
+                                        : "border-border bg-background hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40",
+                                    ].join(" ")}
+                                  >
+                                    <Clock3 className="mr-2 h-4 w-4" />
+                                    {time}
+                                  </button>
+                                );
+                              }
+                            )}
+                          </div>
+                        )}
+
+                      {availability?.businessHours && (
+                        <div className="mt-6 rounded-xl bg-muted/50 p-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Business hours
+                          </p>
+
+                          <p className="mt-1 text-sm font-semibold">
+                            {
+                              availability
+                                .businessHours
+                                .startTime
+                            }{" "}
+                            –{" "}
+                            {
+                              availability
+                                .businessHours
+                                .endTime
+                            }
+                          </p>
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Service duration:{" "}
+                            {selectedService.duration}{" "}
+                            minutes
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {selectedDate && selectedTime && (
+                <section className="border-t border-border/60">
+                  <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
+                    <div className="mb-8">
+                      <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                        Step 3
+                      </p>
+
+                      <h2 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+                        Your details
+                      </h2>
+
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Enter your contact information
+                        to complete the booking.
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-border bg-card p-6 shadow-lg sm:p-8">
+                      <div className="grid gap-5 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <label
+                            htmlFor="customer-name"
+                            className="mb-2 block text-sm font-semibold"
+                          >
+                            Full name
+                            <span className="ml-1 text-xs font-normal text-destructive">
+                              required
+                            </span>
+                          </label>
+
+                          <div className="relative">
+                            <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                            <input
+                              id="customer-name"
+                              value={customerName}
+                              onChange={(event) => {
+                                setCustomerName(
+                                  event.target.value
+                                );
+
+                                if (bookingError) {
+                                  setBookingError("");
+                                }
+                              }}
+                              placeholder="Your full name"
+                              autoComplete="name"
+                              className="h-12 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="customer-email"
+                            className="mb-2 block text-sm font-semibold"
+                          >
+                            Email
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              optional
+                            </span>
+                          </label>
+
+                          <div className="relative">
+                            <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                            <input
+                              id="customer-email"
+                              type="email"
+                              value={customerEmail}
+                              onChange={(event) => {
+                                setCustomerEmail(
+                                  event.target.value
+                                );
+
+                                if (bookingError) {
+                                  setBookingError("");
+                                }
+                              }}
+                              placeholder="you@example.com"
+                              autoComplete="email"
+                              className="h-12 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label
+                            htmlFor="customer-phone"
+                            className="mb-2 block text-sm font-semibold"
+                          >
+                            Phone
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              optional
+                            </span>
+                          </label>
+
+                          <div className="relative">
+                            <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+
+                            <input
+                              id="customer-phone"
+                              type="tel"
+                              value={customerPhone}
+                              onChange={(event) => {
+                                setCustomerPhone(
+                                  event.target.value
+                                );
+
+                                if (bookingError) {
+                                  setBookingError("");
+                                }
+                              }}
+                              placeholder="+1 555 123 4567"
+                              autoComplete="tel"
+                              className="h-12 w-full rounded-xl border border-border bg-background pl-10 pr-4 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <label
+                            htmlFor="booking-notes"
+                            className="mb-2 block text-sm font-semibold"
+                          >
+                            Notes
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              optional
+                            </span>
+                          </label>
+
+                          <textarea
+                            id="booking-notes"
+                            value={notes}
+                            onChange={(event) =>
+                              setNotes(
+                                event.target.value
+                              )
+                            }
+                            placeholder="Anything you would like us to know?"
+                            rows={4}
+                            className="w-full resize-none rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                      </div>
+
+                      {bookingError && (
+                        <div
+                          role="alert"
+                          className="mt-6 rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm font-medium text-destructive"
+                        >
+                          {bookingError}
+                        </div>
+                      )}
+
+                      <div className="mt-8 rounded-2xl border border-border bg-muted/50 p-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Booking summary
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={changeService}
+                            className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            Change service
+                          </button>
+                        </div>
+
+                        <div className="mt-4 space-y-3 text-sm">
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Service
+                            </span>
+
+                            <span className="text-right font-semibold">
+                              {selectedService.name}
+                            </span>
+                          </div>
+
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Date
+                            </span>
+
+                            <span className="text-right font-semibold">
+                              {formatDate(
+                                selectedDate
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Time
+                            </span>
+
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">
+                              {selectedTime}
+                            </span>
+                          </div>
+
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-muted-foreground">
+                              Duration
+                            </span>
+
+                            <span className="font-semibold">
+                              {selectedService.duration}{" "}
+                              min
+                            </span>
+                          </div>
+
+                          <div className="border-t border-border pt-3">
+                            <div className="flex items-start justify-between gap-4">
+                              <span className="font-medium">
+                                Price
+                              </span>
+
+                              <span className="text-lg font-bold">
+                                {formatPrice(
+                                  selectedService.price
+                                )}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <label className="mt-6 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background p-4 transition hover:bg-muted/40">
+                        <input
+                          type="checkbox"
+                          checked={termsAccepted}
+                          onChange={(event) => {
+                            setTermsAccepted(
+                              event.target.checked
+                            );
+
+                            if (
+                              event.target.checked &&
+                              bookingError
+                            ) {
+                              setBookingError("");
+                            }
+                          }}
+                          className="mt-0.5 h-4 w-4 rounded border-border text-blue-600 focus:ring-blue-500"
+                        />
+
+                        <span className="text-sm leading-6 text-muted-foreground">
+                          I confirm that the booking
+                          details are correct and I
+                          agree to the applicable
+                          booking terms and policies.
+                        </span>
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={submitBooking}
+                        disabled={
+                          bookingLoading ||
+                          !customerName.trim() ||
+                          !termsAccepted
+                        }
+                        className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {bookingLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Confirming booking...
+                          </>
+                        ) : (
+                          <>
+                            Confirm booking
+                            <ArrowRight className="h-4 w-4" />
+                          </>
+                        )}
+                      </button>
+
+                      <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                        <ShieldCheck className="h-4 w-4 text-green-500" />
+                        Your booking details are handled
+                        securely.
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+            </>
+          )}
+        </>
       )}
     </main>
   );

@@ -9,6 +9,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { AddCustomerDialog } from "@/components/dashboard/AddCustomerDialog";
 import { CustomersTable } from "@/components/dashboard/CustomersTable";
 import { CustomerFormValues } from "@/components/dashboard/CustomerForm";
+import { getCurrentBusinessContext } from "@/lib/auth";
 import {
   Card,
   CardContent,
@@ -33,7 +34,20 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export default async function CustomersPage() {
+  const context = await getCurrentBusinessContext();
+
+  if (!context) {
+    throw new Error(
+      "You must be signed in to access customers."
+    );
+  }
+
+  const businessId = context.business.id;
+
   const customers = await prisma.customer.findMany({
+    where: {
+      businessId,
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -50,6 +64,18 @@ export default async function CustomersPage() {
     values: CustomerFormValues
   ) {
     "use server";
+
+    const currentContext =
+      await getCurrentBusinessContext();
+
+    if (!currentContext) {
+      throw new Error(
+        "You must be signed in to create a customer."
+      );
+    }
+
+    const currentBusinessId =
+      currentContext.business.id;
 
     const name = values.name.trim();
     const email = values.email.trim();
@@ -75,8 +101,9 @@ export default async function CustomersPage() {
 
     if (email) {
       const existingCustomer =
-        await prisma.customer.findUnique({
+        await prisma.customer.findFirst({
           where: {
+            businessId: currentBusinessId,
             email,
           },
           select: {
@@ -94,6 +121,7 @@ export default async function CustomersPage() {
     try {
       await prisma.customer.create({
         data: {
+          businessId: currentBusinessId,
           name,
           email: email || null,
           phone: phone || null,
@@ -127,6 +155,18 @@ export default async function CustomersPage() {
   ) {
     "use server";
 
+    const currentContext =
+      await getCurrentBusinessContext();
+
+    if (!currentContext) {
+      throw new Error(
+        "You must be signed in to update a customer."
+      );
+    }
+
+    const currentBusinessId =
+      currentContext.business.id;
+
     const name = values.name.trim();
     const email = values.email.trim();
     const phone = values.phone.trim();
@@ -134,6 +174,23 @@ export default async function CustomersPage() {
     if (!id) {
       throw new Error(
         "Customer id is required."
+      );
+    }
+
+    const existingCustomer =
+      await prisma.customer.findFirst({
+        where: {
+          id,
+          businessId: currentBusinessId,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+    if (!existingCustomer) {
+      throw new Error(
+        "Customer not found."
       );
     }
 
@@ -156,9 +213,10 @@ export default async function CustomersPage() {
     }
 
     if (email) {
-      const existingCustomer =
+      const duplicateCustomer =
         await prisma.customer.findFirst({
           where: {
+            businessId: currentBusinessId,
             email,
             NOT: {
               id,
@@ -169,7 +227,7 @@ export default async function CustomersPage() {
           },
         });
 
-      if (existingCustomer) {
+      if (duplicateCustomer) {
         throw new Error(
           "A customer with this email already exists."
         );

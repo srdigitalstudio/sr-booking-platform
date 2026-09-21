@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
-import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -70,9 +70,9 @@ function normalizeTime(value: unknown) {
 
 // GET /api/business-hours
 export async function GET() {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -83,9 +83,14 @@ export async function GET() {
     );
   }
 
+  const businessId = context.business.id;
+
   try {
     const businessHours =
       await prisma.businessHour.findMany({
+        where: {
+          businessId,
+        },
         orderBy: {
           dayOfWeek: "asc",
         },
@@ -111,9 +116,9 @@ export async function GET() {
 
 // POST /api/business-hours
 export async function POST(request: Request) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -123,6 +128,8 @@ export async function POST(request: Request) {
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -193,7 +200,10 @@ export async function POST(request: Request) {
     const existing =
       await prisma.businessHour.findUnique({
         where: {
-          dayOfWeek,
+          businessId_dayOfWeek: {
+            businessId,
+            dayOfWeek,
+          },
         },
       });
 
@@ -212,6 +222,7 @@ export async function POST(request: Request) {
     const businessHour =
       await prisma.businessHour.create({
         data: {
+          businessId,
           dayOfWeek,
           isOpen,
           startTime,
@@ -244,9 +255,9 @@ export async function POST(request: Request) {
 
 // PUT /api/business-hours
 export async function PUT(request: Request) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -256,6 +267,8 @@ export async function PUT(request: Request) {
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -326,7 +339,10 @@ export async function PUT(request: Request) {
     const existing =
       await prisma.businessHour.findUnique({
         where: {
-          dayOfWeek,
+          businessId_dayOfWeek: {
+            businessId,
+            dayOfWeek,
+          },
         },
       });
 
@@ -345,7 +361,10 @@ export async function PUT(request: Request) {
     const businessHour =
       await prisma.businessHour.update({
         where: {
-          dayOfWeek,
+          businessId_dayOfWeek: {
+            businessId,
+            dayOfWeek,
+          },
         },
         data: {
           isOpen,
@@ -376,9 +395,9 @@ export async function PUT(request: Request) {
 export async function DELETE(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -388,6 +407,8 @@ export async function DELETE(
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -410,7 +431,10 @@ export async function DELETE(
     const existing =
       await prisma.businessHour.findUnique({
         where: {
-          dayOfWeek,
+          businessId_dayOfWeek: {
+            businessId,
+            dayOfWeek,
+          },
         },
       });
 
@@ -428,7 +452,10 @@ export async function DELETE(
 
     await prisma.businessHour.delete({
       where: {
-        dayOfWeek,
+        businessId_dayOfWeek: {
+          businessId,
+          dayOfWeek,
+        },
       },
     });
 

@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
-import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -77,22 +77,30 @@ function normalizeLabel(value: unknown) {
 }
 
 async function getBusinessHour(
+  businessId: string,
   dayOfWeek: DayOfWeek
 ) {
   return prisma.businessHour.findUnique({
     where: {
-      dayOfWeek,
+      businessId_dayOfWeek: {
+        businessId,
+        dayOfWeek,
+      },
     },
   });
 }
 
 async function validateBreakTime(
+  businessId: string,
   dayOfWeek: DayOfWeek,
   startTime: string,
   endTime: string
 ) {
   const businessHour =
-    await getBusinessHour(dayOfWeek);
+    await getBusinessHour(
+      businessId,
+      dayOfWeek
+    );
 
   if (!businessHour) {
     return {
@@ -141,6 +149,7 @@ async function validateBreakTime(
 }
 
 async function hasOverlappingBreak(
+  businessId: string,
   dayOfWeek: DayOfWeek,
   startTime: string,
   endTime: string,
@@ -149,6 +158,7 @@ async function hasOverlappingBreak(
   const breaks =
     await prisma.businessBreak.findMany({
       where: {
+        businessId,
         dayOfWeek,
         ...(excludeId
           ? {
@@ -181,9 +191,10 @@ async function hasOverlappingBreak(
 
 // GET /api/business-breaks
 export async function GET() {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -194,9 +205,14 @@ export async function GET() {
     );
   }
 
+  const businessId = context.business.id;
+
   try {
     const businessBreaks =
       await prisma.businessBreak.findMany({
+        where: {
+          businessId,
+        },
         orderBy: [
           {
             dayOfWeek: "asc",
@@ -229,9 +245,10 @@ export async function GET() {
 export async function POST(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -241,6 +258,8 @@ export async function POST(
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -323,6 +342,7 @@ export async function POST(
 
     const businessHourValidation =
       await validateBreakTime(
+        businessId,
         dayOfWeek,
         startTime,
         endTime
@@ -342,6 +362,7 @@ export async function POST(
 
     const overlapping =
       await hasOverlappingBreak(
+        businessId,
         dayOfWeek,
         startTime,
         endTime
@@ -362,6 +383,7 @@ export async function POST(
     const businessBreak =
       await prisma.businessBreak.create({
         data: {
+          businessId,
           dayOfWeek,
           startTime,
           endTime,
@@ -396,9 +418,10 @@ export async function POST(
 export async function PUT(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -408,6 +431,8 @@ export async function PUT(
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -502,9 +527,10 @@ export async function PUT(
     }
 
     const existing =
-      await prisma.businessBreak.findUnique({
+      await prisma.businessBreak.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 
@@ -522,6 +548,7 @@ export async function PUT(
 
     const businessHourValidation =
       await validateBreakTime(
+        businessId,
         dayOfWeek,
         startTime,
         endTime
@@ -541,6 +568,7 @@ export async function PUT(
 
     const overlapping =
       await hasOverlappingBreak(
+        businessId,
         dayOfWeek,
         startTime,
         endTime,
@@ -594,9 +622,10 @@ export async function PUT(
 export async function DELETE(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -606,6 +635,8 @@ export async function DELETE(
       }
     );
   }
+
+  const businessId = context.business.id;
 
   try {
     const body = await request.json();
@@ -624,9 +655,10 @@ export async function DELETE(
     }
 
     const existing =
-      await prisma.businessBreak.findUnique({
+      await prisma.businessBreak.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 

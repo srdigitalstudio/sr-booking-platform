@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
-import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -19,9 +19,7 @@ function isValidDate(value: unknown): value is string {
     return false;
   }
 
-  const [year, month, day] = value
-    .split("-")
-    .map(Number);
+  const [year, month, day] = value.split("-").map(Number);
 
   const date = new Date(
     Date.UTC(year, month - 1, day)
@@ -35,9 +33,7 @@ function isValidDate(value: unknown): value is string {
 }
 
 function parseDate(value: string) {
-  const [year, month, day] = value
-    .split("-")
-    .map(Number);
+  const [year, month, day] = value.split("-").map(Number);
 
   return new Date(
     Date.UTC(year, month - 1, day)
@@ -56,9 +52,9 @@ function normalizeReason(value: unknown) {
 
 // GET /api/blocked-dates
 export async function GET() {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -70,8 +66,13 @@ export async function GET() {
   }
 
   try {
+    const businessId = context.business.id;
+
     const blockedDates =
       await prisma.blockedDate.findMany({
+        where: {
+          businessId,
+        },
         orderBy: {
           date: "asc",
         },
@@ -99,9 +100,9 @@ export async function GET() {
 export async function POST(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -113,15 +114,13 @@ export async function POST(
   }
 
   try {
+   const businessId = context.business.id;
+
     const body = await request.json();
 
-    const dateValue = normalizeDate(
-      body.date
-    );
+    const dateValue = normalizeDate(body.date);
 
-    const reason = normalizeReason(
-      body.reason
-    );
+    const reason = normalizeReason(body.reason);
 
     if (!isValidDate(dateValue)) {
       return Response.json(
@@ -152,7 +151,10 @@ export async function POST(
     const existing =
       await prisma.blockedDate.findUnique({
         where: {
-          date,
+          businessId_date: {
+            businessId,
+            date,
+          },
         },
       });
 
@@ -171,6 +173,7 @@ export async function POST(
     const blockedDate =
       await prisma.blockedDate.create({
         data: {
+          businessId,
           date,
           reason,
         },
@@ -203,9 +206,9 @@ export async function POST(
 export async function PUT(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -217,17 +220,15 @@ export async function PUT(
   }
 
   try {
+    const businessId = context.business.id;
+
     const body = await request.json();
 
     const id = String(body.id ?? "").trim();
 
-    const dateValue = normalizeDate(
-      body.date
-    );
+    const dateValue = normalizeDate(body.date);
 
-    const reason = normalizeReason(
-      body.reason
-    );
+    const reason = normalizeReason(body.reason);
 
     if (!id) {
       return Response.json(
@@ -266,9 +267,10 @@ export async function PUT(
     }
 
     const existing =
-      await prisma.blockedDate.findUnique({
+      await prisma.blockedDate.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 
@@ -288,6 +290,7 @@ export async function PUT(
     const duplicate =
       await prisma.blockedDate.findFirst({
         where: {
+          businessId,
           date,
           id: {
             not: id,
@@ -340,9 +343,9 @@ export async function PUT(
 export async function DELETE(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context = await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return Response.json(
       {
         error: "Unauthorized",
@@ -354,6 +357,8 @@ export async function DELETE(
   }
 
   try {
+   const businessId = context.business.id;
+
     const body = await request.json();
 
     const id = String(body.id ?? "").trim();
@@ -371,9 +376,10 @@ export async function DELETE(
     }
 
     const existing =
-      await prisma.blockedDate.findUnique({
+      await prisma.blockedDate.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 

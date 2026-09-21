@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -181,20 +181,30 @@ function createCustomerEmail(
   return `${safeName}@local.customer`;
 }
 
-async function getSettings() {
+async function getSettings(
+  businessId: string
+) {
   const existingSettings =
-    await prisma.settings.findFirst();
+    await prisma.settings.findUnique({
+      where: {
+        businessId,
+      },
+    });
 
   if (existingSettings) {
     return existingSettings;
   }
 
   return prisma.settings.create({
-    data: DEFAULT_SETTINGS,
+    data: {
+      ...DEFAULT_SETTINGS,
+      businessId,
+    },
   });
 }
 
 async function findOrCreateCustomer(
+  businessId: string,
   customerName: string
 ) {
   const email =
@@ -202,12 +212,16 @@ async function findOrCreateCustomer(
 
   return prisma.customer.upsert({
     where: {
-      email,
+      businessId_email: {
+        businessId,
+        email,
+      },
     },
     update: {
       name: customerName,
     },
     create: {
+      businessId,
       name: customerName,
       email,
     },
@@ -215,10 +229,12 @@ async function findOrCreateCustomer(
 }
 
 async function findService(
+  businessId: string,
   serviceName: string
 ) {
   return prisma.service.findFirst({
     where: {
+      businessId,
       name: {
         equals: serviceName,
         mode: "insensitive",
@@ -228,14 +244,8 @@ async function findService(
   });
 }
 
-async function getAuthenticatedUser() {
-  const user = await requireApiUser();
-
-  if (!user) {
-    return null;
-  }
-
-  return user;
+async function getBusinessContext() {
+  return getCurrentBusinessContext();
 }
 
 /**
@@ -248,11 +258,13 @@ async function getAuthenticatedUser() {
  * - other active appointments
  */
 async function validateAppointmentAvailability({
+  businessId,
   date,
   time,
   duration,
   excludeAppointmentId,
 }: {
+  businessId: string;
   date: Date;
   time: string;
   duration: number;
@@ -263,7 +275,10 @@ async function validateAppointmentAvailability({
   const businessHour =
     await prisma.businessHour.findUnique({
       where: {
-        dayOfWeek,
+        businessId_dayOfWeek: {
+          businessId,
+          dayOfWeek,
+        },
       },
     });
 
@@ -286,7 +301,10 @@ async function validateAppointmentAvailability({
   const blockedDate =
     await prisma.blockedDate.findUnique({
       where: {
-        date,
+        businessId_date: {
+          businessId,
+          date,
+        },
       },
     });
 
@@ -337,6 +355,7 @@ async function validateAppointmentAvailability({
   const businessBreaks =
     await prisma.businessBreak.findMany({
       where: {
+        businessId,
         dayOfWeek,
       },
     });
@@ -375,6 +394,7 @@ async function validateAppointmentAvailability({
   const appointments =
     await prisma.appointment.findMany({
       where: {
+        businessId,
         date,
         status: {
           not: "CANCELLED",
@@ -443,10 +463,10 @@ function handleUnexpectedError(
 
 export async function GET() {
   try {
-    const user =
-      await getAuthenticatedUser();
+    const context =
+      await getBusinessContext();
 
-    if (!user) {
+    if (!context) {
       return jsonError(
         "Unauthorized",
         401
@@ -455,6 +475,10 @@ export async function GET() {
 
     const appointments =
       await prisma.appointment.findMany({
+        where: {
+          businessId:
+            context.business.id,
+        },
         include: {
           customer: true,
           service: true,
@@ -488,15 +512,18 @@ export async function POST(
   request: Request
 ) {
   try {
-    const user =
-      await getAuthenticatedUser();
+    const context =
+      await getBusinessContext();
 
-    if (!user) {
+    if (!context) {
       return jsonError(
         "Unauthorized",
         401
       );
     }
+
+    const businessId =
+      context.business.id;
 
     let body: Record<
       string,
@@ -572,7 +599,7 @@ export async function POST(
     }
 
     const settings =
-      await getSettings();
+      await getSettings(businessId);
 
     if (!settings.bookingEnabled) {
       return jsonError(
@@ -582,7 +609,10 @@ export async function POST(
     }
 
     const serviceRecord =
-      await findService(service);
+      await findService(
+        businessId,
+        service
+      );
 
     if (!serviceRecord) {
       return jsonError(
@@ -605,6 +635,7 @@ export async function POST(
 
     const availability =
       await validateAppointmentAvailability({
+        businessId,
         date: appointmentDate,
         time,
         duration:
@@ -621,12 +652,14 @@ export async function POST(
 
     const customerRecord =
       await findOrCreateCustomer(
+        businessId,
         customer
       );
 
     const appointment =
       await prisma.appointment.create({
         data: {
+          businessId,
           customerId:
             customerRecord.id,
           serviceId:
@@ -664,15 +697,18 @@ export async function PATCH(
   request: Request
 ) {
   try {
-    const user =
-      await getAuthenticatedUser();
+    const context =
+      await getBusinessContext();
 
-    if (!user) {
+    if (!context) {
       return jsonError(
         "Unauthorized",
         401
       );
     }
+
+    const businessId =
+      context.business.id;
 
     let body: Record<
       string,
@@ -703,9 +739,10 @@ export async function PATCH(
     }
 
     const appointment =
-      await prisma.appointment.findUnique({
+      await prisma.appointment.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 
@@ -813,7 +850,10 @@ export async function PATCH(
     }
 
     const serviceRecord =
-      await findService(service);
+      await findService(
+        businessId,
+        service
+      );
 
     if (!serviceRecord) {
       return jsonError(
@@ -836,6 +876,7 @@ export async function PATCH(
 
     const availability =
       await validateAppointmentAvailability({
+        businessId,
         date: appointmentDate,
         time,
         duration:
@@ -854,6 +895,7 @@ export async function PATCH(
 
     const customerRecord =
       await findOrCreateCustomer(
+        businessId,
         customer
       );
 
@@ -895,15 +937,18 @@ export async function DELETE(
   request: Request
 ) {
   try {
-    const user =
-      await getAuthenticatedUser();
+    const context =
+      await getBusinessContext();
 
-    if (!user) {
+    if (!context) {
       return jsonError(
         "Unauthorized",
         401
       );
     }
+
+    const businessId =
+      context.business.id;
 
     let body: Record<
       string,
@@ -934,9 +979,10 @@ export async function DELETE(
     }
 
     const appointment =
-      await prisma.appointment.findUnique({
+      await prisma.appointment.findFirst({
         where: {
           id,
+          businessId,
         },
       });
 

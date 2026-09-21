@@ -1,4 +1,9 @@
-import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  randomBytes,
+  scrypt,
+  timingSafeEqual,
+} from "node:crypto";
 import { promisify } from "node:util";
 import { cookies } from "next/headers";
 
@@ -8,7 +13,8 @@ import { PrismaClient } from "@/generated/prisma/client";
 const scryptAsync = promisify(scrypt);
 
 const SESSION_COOKIE_NAME = "sr_session";
-const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30;
+const SESSION_DURATION_MS =
+  1000 * 60 * 60 * 24 * 30;
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -90,7 +96,8 @@ export async function createSession(
     name: SESSION_COOKIE_NAME,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure:
+      process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
     expires: expiresAt,
@@ -136,6 +143,96 @@ export async function getCurrentUser() {
   }
 
   return session.user;
+}
+
+export async function getCurrentBusinessContext() {
+  const cookieStore = await cookies();
+
+  const token = cookieStore.get(
+    SESSION_COOKIE_NAME
+  )?.value;
+
+  if (!token) {
+    return null;
+  }
+
+  const tokenHash = hashToken(token);
+
+  const session = await prisma.session.findUnique({
+    where: {
+      tokenHash,
+    },
+    select: {
+      expiresAt: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          memberships: {
+            orderBy: {
+              createdAt: "asc",
+            },
+            take: 1,
+            select: {
+              id: true,
+              role: true,
+              businessId: true,
+              business: {
+                select: {
+                  id: true,
+                  name: true,
+                  slug: true,
+                  description: true,
+                  logoUrl: true,
+                  timezone: true,
+                  currency: true,
+                  active: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!session) {
+    return null;
+  }
+
+  if (session.expiresAt <= new Date()) {
+    await prisma.session.deleteMany({
+      where: {
+        tokenHash,
+      },
+    });
+
+    return null;
+  }
+
+  const membership = session.user.memberships[0];
+
+  if (!membership || !membership.business) {
+    return null;
+  }
+
+  if (!membership.business.active) {
+    return null;
+  }
+
+  return {
+    user: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+    },
+    membership: {
+      id: membership.id,
+      role: membership.role,
+    },
+    business: membership.business,
+  };
 }
 
 export async function deleteCurrentSession() {
