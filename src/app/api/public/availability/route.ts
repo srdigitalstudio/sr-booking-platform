@@ -100,21 +100,32 @@ function minutesToTime(totalMinutes: number): string {
   ).padStart(2, "0")}`;
 }
 
-function getDayOfWeek(date: Date): DayOfWeek {
-  switch (date.getUTCDay()) {
-    case 0:
+function getDayOfWeek(
+  date: Date,
+  timezone: string
+): DayOfWeek {
+  const weekday = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      weekday: "long",
+      timeZone: timezone,
+    }
+  ).format(date);
+
+  switch (weekday) {
+    case "Sunday":
       return "SUNDAY";
-    case 1:
+    case "Monday":
       return "MONDAY";
-    case 2:
+    case "Tuesday":
       return "TUESDAY";
-    case 3:
+    case "Wednesday":
       return "WEDNESDAY";
-    case 4:
+    case "Thursday":
       return "THURSDAY";
-    case 5:
+    case "Friday":
       return "FRIDAY";
-    case 6:
+    case "Saturday":
       return "SATURDAY";
     default:
       return "SUNDAY";
@@ -129,12 +140,39 @@ function getDateKey(date: Date): string {
   ).padStart(2, "0")}`;
 }
 
+function getCurrentTimeInTimezone(
+  timezone: string
+): string {
+  const parts = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: timezone,
+    }
+  ).formatToParts(new Date());
+
+  const hour =
+    parts.find(
+      (part) => part.type === "hour"
+    )?.value ?? "00";
+
+  const minute =
+    parts.find(
+      (part) => part.type === "minute"
+    )?.value ?? "00";
+
+  return `${hour}:${minute}`;
+}
+
 function generateSlots({
   startTime,
   endTime,
   duration,
   breaks,
   appointments,
+  currentTime,
 }: {
   startTime: string;
   endTime: string;
@@ -149,6 +187,7 @@ function generateSlots({
       duration: number;
     };
   }>;
+  currentTime?: string;
 }): string[] {
   const businessStart = timeToMinutes(startTime);
   const businessEnd = timeToMinutes(endTime);
@@ -170,6 +209,13 @@ function generateSlots({
     current += 30
   ) {
     const slotEnd = current + duration;
+
+    if (
+      currentTime &&
+      current < timeToMinutes(currentTime)
+    ) {
+      continue;
+    }
 
     const overlapsBreak = breaks.some((item) => {
       const breakStart = timeToMinutes(item.startTime);
@@ -292,6 +338,17 @@ export async function GET(request: Request) {
 
     const businessId = business.id;
 
+    let businessTimezone =
+      business.timezone;
+
+    try {
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: businessTimezone,
+      }).format(date);
+    } catch {
+      businessTimezone = "UTC";
+    }
+
     const settings =
       await prisma.settings.findUnique({
         where: {
@@ -340,7 +397,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const dayOfWeek = getDayOfWeek(date);
+    const dayOfWeek =
+      getDayOfWeek(
+        date,
+        businessTimezone
+      );
 
     const businessHour =
       await prisma.businessHour.findUnique({
@@ -500,12 +561,28 @@ export async function GET(request: Request) {
       }
     );
 
+    const currentDateKey =
+      new Intl.DateTimeFormat("en-CA", {
+        timeZone: businessTimezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+
+    const currentTime =
+      dateValue === currentDateKey
+        ? getCurrentTimeInTimezone(
+            businessTimezone
+          )
+        : undefined;
+
     const slots = generateSlots({
       startTime: businessHour.startTime,
       endTime: businessHour.endTime,
       duration: service.duration,
       breaks: validBreaks,
       appointments: validAppointments,
+      currentTime,
     });
 
     return NextResponse.json({

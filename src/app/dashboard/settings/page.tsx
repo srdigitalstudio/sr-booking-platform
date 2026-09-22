@@ -35,6 +35,7 @@ type SettingsData = {
   customerNotifications: boolean;
   language: string;
   currency: string;
+  timezone: string;
 };
 
 const defaultSettings: SettingsData = {
@@ -46,7 +47,127 @@ const defaultSettings: SettingsData = {
   customerNotifications: true,
   language: "English",
   currency: "USD",
+  timezone: "UTC",
 };
+
+const timezoneOptions = [
+  {
+    value: "UTC",
+    label: "UTC",
+  },
+  {
+    value: "Asia/Kabul",
+    label: "Afghanistan — Kabul (UTC+04:30)",
+  },
+  {
+    value: "Asia/Tehran",
+    label: "Iran — Tehran",
+  },
+  {
+    value: "Asia/Dubai",
+    label: "United Arab Emirates — Dubai",
+  },
+  {
+    value: "Asia/Karachi",
+    label: "Pakistan — Karachi",
+  },
+  {
+    value: "Asia/Kolkata",
+    label: "India — Kolkata",
+  },
+  {
+    value: "Asia/Dhaka",
+    label: "Bangladesh — Dhaka",
+  },
+  {
+    value: "Asia/Tashkent",
+    label: "Uzbekistan — Tashkent",
+  },
+  {
+    value: "Asia/Almaty",
+    label: "Kazakhstan — Almaty",
+  },
+  {
+    value: "Asia/Bangkok",
+    label: "Thailand — Bangkok",
+  },
+  {
+    value: "Asia/Shanghai",
+    label: "China — Shanghai",
+  },
+  {
+    value: "Asia/Tokyo",
+    label: "Japan — Tokyo",
+  },
+  {
+    value: "Asia/Seoul",
+    label: "South Korea — Seoul",
+  },
+  {
+    value: "Asia/Singapore",
+    label: "Singapore",
+  },
+  {
+    value: "Australia/Sydney",
+    label: "Australia — Sydney",
+  },
+  {
+    value: "Europe/London",
+    label: "United Kingdom — London",
+  },
+  {
+    value: "Europe/Paris",
+    label: "France — Paris",
+  },
+  {
+    value: "Europe/Berlin",
+    label: "Germany — Berlin",
+  },
+  {
+    value: "Europe/Moscow",
+    label: "Russia — Moscow",
+  },
+  {
+    value: "Africa/Cairo",
+    label: "Egypt — Cairo",
+  },
+  {
+    value: "Africa/Johannesburg",
+    label: "South Africa — Johannesburg",
+  },
+  {
+    value: "America/New_York",
+    label: "United States — New York",
+  },
+  {
+    value: "America/Chicago",
+    label: "United States — Chicago",
+  },
+  {
+    value: "America/Denver",
+    label: "United States — Denver",
+  },
+  {
+    value: "America/Los_Angeles",
+    label: "United States — Los Angeles",
+  },
+  {
+    value: "America/Toronto",
+    label: "Canada — Toronto",
+  },
+  {
+    value: "America/Vancouver",
+    label: "Canada — Vancouver",
+  },
+  {
+    value: "America/Mexico_City",
+    label: "Mexico — Mexico City",
+  },
+  {
+    value: "America/Sao_Paulo",
+    label: "Brazil — São Paulo",
+  },
+];
 
 export default function SettingsPage() {
   const [settings, setSettings] =
@@ -72,7 +193,11 @@ export default function SettingsPage() {
         const data =
           (await response.json()) as SettingsData;
 
-        setSettings(data);
+        setSettings({
+          ...defaultSettings,
+          ...data,
+          timezone: data.timezone || "UTC",
+        });
       } catch (err) {
         console.error(err);
         setError("Unable to load settings.");
@@ -111,9 +236,8 @@ export default function SettingsPage() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(
-          () => null
-        );
+        const data =
+          await response.json().catch(() => null);
 
         throw new Error(
           data?.error || "Failed to save settings"
@@ -123,7 +247,12 @@ export default function SettingsPage() {
       const data =
         (await response.json()) as SettingsData;
 
-      setSettings(data);
+      setSettings({
+        ...defaultSettings,
+        ...data,
+        timezone: data.timezone || "UTC",
+      });
+
       setMessage("Settings saved successfully.");
     } catch (err) {
       console.error(err);
@@ -190,10 +319,7 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <CardTitle>
-                  Business Information
-                </CardTitle>
-
+                <CardTitle>Business Information</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Manage your business name and basic information.
                 </p>
@@ -242,10 +368,7 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <CardTitle>
-                  Booking Settings
-                </CardTitle>
-
+                <CardTitle>Booking Settings</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Configure how customers can make appointments.
                 </p>
@@ -293,21 +416,10 @@ export default function SettingsPage() {
                 }
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
-                <option value="PENDING">
-                  Pending
-                </option>
-
-                <option value="CONFIRMED">
-                  Confirmed
-                </option>
-
-                <option value="COMPLETED">
-                  Completed
-                </option>
-
-                <option value="CANCELLED">
-                  Cancelled
-                </option>
+                <option value="PENDING">Pending</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
             </div>
           </CardContent>
@@ -321,10 +433,7 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <CardTitle>
-                  Notifications
-                </CardTitle>
-
+                <CardTitle>Notifications</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Control notifications related to your bookings.
                 </p>
@@ -346,9 +455,7 @@ export default function SettingsPage() {
 
               <input
                 type="checkbox"
-                checked={
-                  settings.bookingNotifications
-                }
+                checked={settings.bookingNotifications}
                 onChange={(event) =>
                   updateSettings({
                     bookingNotifications:
@@ -372,9 +479,7 @@ export default function SettingsPage() {
 
               <input
                 type="checkbox"
-                checked={
-                  settings.customerNotifications
-                }
+                checked={settings.customerNotifications}
                 onChange={(event) =>
                   updateSettings({
                     customerNotifications:
@@ -395,12 +500,9 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <CardTitle>
-                  Language & Region
-                </CardTitle>
-
+                <CardTitle>Language & Region</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Manage language and regional preferences.
+                  Manage language, timezone, and regional preferences.
                 </p>
               </div>
             </div>
@@ -421,18 +523,40 @@ export default function SettingsPage() {
                 }
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
-                <option value="English">
-                  English
-                </option>
-
-                <option value="Dari">
-                  Dari
-                </option>
-
-                <option value="Pashto">
-                  Pashto
-                </option>
+                <option value="English">English</option>
+                <option value="Dari">Dari</option>
+                <option value="Pashto">Pashto</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Timezone
+              </label>
+
+              <select
+                value={settings.timezone}
+                onChange={(event) =>
+                  updateSettings({
+                    timezone: event.target.value,
+                  })
+                }
+                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
+              >
+                {timezoneOptions.map((timezone) => (
+                  <option
+                    key={timezone.value}
+                    value={timezone.value}
+                  >
+                    {timezone.label}
+                  </option>
+                ))}
+              </select>
+
+              <p className="text-xs text-muted-foreground">
+                This timezone is used to calculate business hours and
+                available booking times.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -449,17 +573,9 @@ export default function SettingsPage() {
                 }
                 className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-blue-500"
               >
-                <option value="USD">
-                  USD
-                </option>
-
-                <option value="EUR">
-                  EUR
-                </option>
-
-                <option value="AFN">
-                  AFN
-                </option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+                <option value="AFN">AFN</option>
               </select>
             </div>
           </CardContent>
@@ -473,8 +589,7 @@ export default function SettingsPage() {
           </h2>
 
           <p className="mt-1 text-sm text-muted-foreground">
-            Configure your weekly schedule, breaks, and blocked
-            dates.
+            Configure your weekly schedule, breaks, and blocked dates.
           </p>
         </div>
 

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import {
+  Prisma,
+  PrismaClient,
+} from "@/generated/prisma/client";
+
+import { validateAppointmentAvailability } from "@/lib/booking/availability";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -25,15 +30,6 @@ const prisma =
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }
-
-type DayOfWeek =
-  | "SATURDAY"
-  | "SUNDAY"
-  | "MONDAY"
-  | "TUESDAY"
-  | "WEDNESDAY"
-  | "THURSDAY"
-  | "FRIDAY";
 
 const DEFAULT_SETTINGS = {
   businessName: "SR Booking",
@@ -73,12 +69,16 @@ function isValidDateFormat(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-function parseAppointmentDate(value: string): Date | null {
+function parseAppointmentDate(
+  value: string
+): Date | null {
   if (!isValidDateFormat(value)) {
     return null;
   }
 
-  const [year, month, day] = value.split("-").map(Number);
+  const [year, month, day] = value
+    .split("-")
+    .map(Number);
 
   const date = new Date(
     Date.UTC(year, month - 1, day)
@@ -103,47 +103,12 @@ function formatDateKey(date: Date): string {
   ].join("-");
 }
 
-function timeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(":").map(Number);
-
-  return hours * 60 + minutes;
-}
-
-function minutesToTime(totalMinutes: number): string {
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-
-  return `${String(hours).padStart(2, "0")}:${String(
-    minutes
-  ).padStart(2, "0")}`;
-}
-
-function getDayOfWeek(date: Date): DayOfWeek {
-  switch (date.getUTCDay()) {
-    case 0:
-      return "SUNDAY";
-    case 1:
-      return "MONDAY";
-    case 2:
-      return "TUESDAY";
-    case 3:
-      return "WEDNESDAY";
-    case 4:
-      return "THURSDAY";
-    case 5:
-      return "FRIDAY";
-    case 6:
-      return "SATURDAY";
-    default:
-      return "SUNDAY";
-  }
-}
-
 function createCustomerEmail(
   customerName: string,
   customerEmail?: string
 ): string {
-  const providedEmail = normalizeText(customerEmail);
+  const providedEmail =
+    normalizeText(customerEmail);
 
   if (providedEmail) {
     return providedEmail.toLowerCase();
@@ -158,7 +123,8 @@ function createCustomerEmail(
     .replace(/\.{2,}/g, ".")
     .replace(/^\.+|\.+$/g, "");
 
-  const safeName = normalizedName || "customer";
+  const safeName =
+    normalizedName || "customer";
 
   return `${safeName}@local.customer`;
 }
@@ -189,12 +155,15 @@ async function getPublicBusiness(
   });
 }
 
-async function getSettings(businessId: string) {
-  const settings = await prisma.settings.findUnique({
-    where: {
-      businessId,
-    },
-  });
+async function getSettings(
+  businessId: string
+) {
+  const settings =
+    await prisma.settings.findUnique({
+      where: {
+        businessId,
+      },
+    });
 
   if (settings) {
     return settings;
@@ -209,23 +178,28 @@ async function getSettings(businessId: string) {
 }
 
 async function findOrCreateCustomer({
+  prismaClient,
   businessId,
   name,
   email,
   phone,
 }: {
+  prismaClient:
+    | PrismaClient
+    | Prisma.TransactionClient;
   businessId: string;
   name: string;
   email?: string;
   phone?: string;
 }) {
-  const customerEmail = createCustomerEmail(
-    name,
-    email
-  );
+  const customerEmail =
+    createCustomerEmail(
+      name,
+      email
+    );
 
   const existingCustomer =
-    await prisma.customer.findUnique({
+    await prismaClient.customer.findUnique({
       where: {
         businessId_email: {
           businessId,
@@ -235,7 +209,7 @@ async function findOrCreateCustomer({
     });
 
   if (existingCustomer) {
-    return prisma.customer.update({
+    return prismaClient.customer.update({
       where: {
         id: existingCustomer.id,
       },
@@ -250,7 +224,7 @@ async function findOrCreateCustomer({
     });
   }
 
-  return prisma.customer.create({
+  return prismaClient.customer.create({
     data: {
       businessId,
       name,
@@ -277,173 +251,25 @@ async function findActiveService(
   });
 }
 
-async function validateAppointmentAvailability({
-  businessId,
-  date,
-  time,
-  duration,
-}: {
-  businessId: string;
-  date: Date;
-  time: string;
-  duration: number;
-}) {
-  const dayOfWeek = getDayOfWeek(date);
-
-  const businessHour =
-    await prisma.businessHour.findUnique({
-      where: {
-        businessId_dayOfWeek: {
-          businessId,
-          dayOfWeek,
-        },
-      },
-    });
-
-  if (!businessHour) {
-    return {
-      valid: false,
-      error:
-        "Business hours for this day have not been configured.",
-    };
-  }
-
-  if (!businessHour.isOpen) {
-    return {
-      valid: false,
-      error: "The business is closed on this day.",
-    };
-  }
-
-  const blockedDate =
-    await prisma.blockedDate.findUnique({
-      where: {
-        businessId_date: {
-          businessId,
-          date,
-        },
-      },
-    });
-
-  if (blockedDate) {
-    return {
-      valid: false,
-      error: blockedDate.reason
-        ? `This date is blocked: ${blockedDate.reason}`
-        : "This date is blocked for bookings.",
-    };
-  }
-
-  const appointmentStart = timeToMinutes(time);
-  const appointmentEnd =
-    appointmentStart + duration;
-
-  const businessStart = timeToMinutes(
-    businessHour.startTime
+function isBookingUnavailableError(
+  error: unknown
+): error is Error {
+  return (
+    error instanceof Error &&
+    error.message.startsWith(
+      "BOOKING_UNAVAILABLE:"
+    )
   );
-
-  const businessEnd = timeToMinutes(
-    businessHour.endTime
-  );
-
-  if (appointmentStart < businessStart) {
-    return {
-      valid: false,
-      error: `Appointment must start at or after ${businessHour.startTime}.`,
-    };
-  }
-
-  if (appointmentEnd > businessEnd) {
-    return {
-      valid: false,
-      error: `This appointment would end at ${minutesToTime(
-        appointmentEnd
-      )}, outside business hours ending at ${businessHour.endTime}.`,
-    };
-  }
-
-  const businessBreaks =
-    await prisma.businessBreak.findMany({
-      where: {
-        businessId,
-        dayOfWeek,
-      },
-    });
-
-  const overlappingBreak =
-    businessBreaks.find((businessBreak) => {
-      const breakStart = timeToMinutes(
-        businessBreak.startTime
-      );
-
-      const breakEnd = timeToMinutes(
-        businessBreak.endTime
-      );
-
-      return (
-        appointmentStart < breakEnd &&
-        appointmentEnd > breakStart
-      );
-    });
-
-  if (overlappingBreak) {
-    return {
-      valid: false,
-      error: overlappingBreak.label
-        ? `This appointment overlaps with the break "${overlappingBreak.label}".`
-        : "This appointment overlaps with a business break.",
-    };
-  }
-
-  const existingAppointments =
-    await prisma.appointment.findMany({
-      where: {
-        businessId,
-        date,
-        status: {
-          not: "CANCELLED",
-        },
-      },
-      include: {
-        service: true,
-      },
-    });
-
-  const overlappingAppointment =
-    existingAppointments.find(
-      (existingAppointment) => {
-        const existingStart = timeToMinutes(
-          existingAppointment.time
-        );
-
-        const existingEnd =
-          existingStart +
-          existingAppointment.service.duration;
-
-        return (
-          appointmentStart < existingEnd &&
-          appointmentEnd > existingStart
-        );
-      }
-    );
-
-  if (overlappingAppointment) {
-    return {
-      valid: false,
-      error: `This time overlaps with an existing appointment at ${overlappingAppointment.time}.`,
-    };
-  }
-
-  return {
-    valid: true,
-  };
 }
 
 function handleUnexpectedError(
   operation: string,
   error: unknown
 ) {
-  console.error(`${operation} failed:`, error);
+  console.error(
+    `${operation} failed:`,
+    error
+  );
 
   return jsonError(
     "Something went wrong. Please try again.",
@@ -451,19 +277,22 @@ function handleUnexpectedError(
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* POST                        */
-/* -------------------------------------------------------------------------- */
-
-export async function POST(request: Request) {
+/* POST */
+export async function POST(
+  request: Request
+) {
   try {
-    let body: Record<string, unknown>;
+    let body: Record<
+      string,
+      unknown
+    >;
 
     try {
-      body = (await request.json()) as Record<
-        string,
-        unknown
-      >;
+      body =
+        (await request.json()) as Record<
+          string,
+          unknown
+        >;
     } catch {
       return jsonError(
         "Invalid request body.",
@@ -471,35 +300,47 @@ export async function POST(request: Request) {
       );
     }
 
-    const businessSlug = normalizeText(
-      body.businessSlug
-    );
+    const businessSlug =
+      normalizeText(
+        body.businessSlug
+      );
 
-    const customerName = normalizeText(
-      body.customerName ?? body.customer
-    );
+    const customerName =
+      normalizeText(
+        body.customerName ??
+          body.customer
+      );
 
-    const customerEmail = normalizeText(
-      body.customerEmail ?? body.email
-    );
+    const customerEmail =
+      normalizeText(
+        body.customerEmail ??
+          body.email
+      );
 
-    const customerPhone = normalizeText(
-      body.customerPhone ?? body.phone
-    );
+    const customerPhone =
+      normalizeText(
+        body.customerPhone ??
+          body.phone
+      );
 
-    const serviceId = normalizeText(
-      body.serviceId
-    );
+    const serviceId =
+      normalizeText(
+        body.serviceId
+      );
 
-    const serviceName = normalizeText(
-      body.service
-    );
+    const serviceName =
+      normalizeText(
+        body.service
+      );
 
-    const date = normalizeText(body.date);
+    const date =
+      normalizeText(body.date);
 
-    const time = normalizeText(body.time);
+    const time =
+      normalizeText(body.time);
 
-    const notes = normalizeText(body.notes);
+    const notes =
+      normalizeText(body.notes);
 
     if (!customerName) {
       return jsonError(
@@ -572,8 +413,8 @@ export async function POST(request: Request) {
     }
 
     const today = new Date();
-
-    const todayKey = formatDateKey(today);
+    const todayKey =
+      formatDateKey(today);
 
     if (date < todayKey) {
       return jsonError(
@@ -583,7 +424,9 @@ export async function POST(request: Request) {
     }
 
     const business =
-      await getPublicBusiness(businessSlug);
+      await getPublicBusiness(
+        businessSlug
+      );
 
     if (!business) {
       return jsonError(
@@ -592,10 +435,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const businessId = business.id;
+    const businessId =
+      business.id;
 
     const settings =
-      await getSettings(businessId);
+      await getSettings(
+        businessId
+      );
 
     if (!settings.bookingEnabled) {
       return jsonError(
@@ -645,61 +491,97 @@ export async function POST(request: Request) {
       );
     }
 
-    const availability =
-      await validateAppointmentAvailability({
-        businessId,
-        date: appointmentDate,
-        time,
-        duration: serviceRecord.duration,
-      });
+    try {
+      const appointment =
+        await prisma.$transaction(
+          async (transaction) => {
+            const bookingLockKey =
+              `${businessId}:${date}:${time}`;
 
-    if (!availability.valid) {
-      return jsonError(
-        availability.error ??
-          "This appointment time is not available.",
-        409
+            await transaction.$executeRaw`
+              SELECT pg_advisory_xact_lock(
+                hashtextextended(
+                  ${bookingLockKey},
+                  0
+                )
+              )
+            `;
+
+            const availability =
+              await validateAppointmentAvailability({
+                prisma: transaction,
+                businessId,
+                date: appointmentDate,
+                time,
+                duration:
+                  serviceRecord.duration,
+              });
+
+            if (!availability.valid) {
+              throw new Error(
+                `BOOKING_UNAVAILABLE:${availability.error}`
+              );
+            }
+
+            const customer =
+              await findOrCreateCustomer({
+                prismaClient:
+                  transaction,
+                businessId,
+                name: customerName,
+                email: customerEmail,
+                phone: customerPhone,
+              });
+
+            return transaction.appointment.create({
+              data: {
+                businessId,
+                customerId:
+                  customer.id,
+                serviceId:
+                  serviceRecord.id,
+                date: appointmentDate,
+                time,
+                status:
+                  settings.defaultAppointmentStatus,
+                ...(notes
+                  ? {
+                      notes,
+                    }
+                  : {}),
+              },
+              include: {
+                customer: true,
+                service: true,
+              },
+            });
+          }
+        );
+
+      return NextResponse.json(
+        {
+          success: true,
+          appointment,
+        },
+        {
+          status: 201,
+        }
       );
-    }
-
-    const customer =
-      await findOrCreateCustomer({
-        businessId,
-        name: customerName,
-        email: customerEmail,
-        phone: customerPhone,
-      });
-
-    const appointment =
-      await prisma.appointment.create({
-        data: {
-          businessId,
-          customerId: customer.id,
-          serviceId: serviceRecord.id,
-          date: appointmentDate,
-          time,
-          status:
-            settings.defaultAppointmentStatus,
-          ...(notes
-            ? {
-                notes,
-              }
-            : {}),
-        },
-        include: {
-          customer: true,
-          service: true,
-        },
-      });
-
-    return NextResponse.json(
-      {
-        success: true,
-        appointment,
-      },
-      {
-        status: 201,
+    } catch (error) {
+      if (
+        isBookingUnavailableError(error)
+      ) {
+        return jsonError(
+          error.message.replace(
+            "BOOKING_UNAVAILABLE:",
+            ""
+          ),
+          409
+        );
       }
-    );
+
+      throw error;
+    }
   } catch (error) {
     return handleUnexpectedError(
       "POST /api/public/appointments",
@@ -708,23 +590,27 @@ export async function POST(request: Request) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* GET                        */
-/* -------------------------------------------------------------------------- */
-
+/* GET */
 export async function GET(
   request: Request
 ) {
   try {
-    const url = new URL(request.url);
+    const url =
+      new URL(request.url);
 
-    const businessSlug = normalizeText(
-      url.searchParams.get("businessSlug")
-    );
+    const businessSlug =
+      normalizeText(
+        url.searchParams.get(
+          "businessSlug"
+        )
+      );
 
-    const date = normalizeText(
-      url.searchParams.get("date")
-    );
+    const date =
+      normalizeText(
+        url.searchParams.get(
+          "date"
+        )
+      );
 
     if (!date) {
       return jsonError(
@@ -744,7 +630,9 @@ export async function GET(
     }
 
     const business =
-      await getPublicBusiness(businessSlug);
+      await getPublicBusiness(
+        businessSlug
+      );
 
     if (!business) {
       return jsonError(
@@ -756,7 +644,8 @@ export async function GET(
     const appointments =
       await prisma.appointment.findMany({
         where: {
-          businessId: business.id,
+          businessId:
+            business.id,
           date: appointmentDate,
           status: {
             not: "CANCELLED",

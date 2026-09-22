@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { requireApiUser } from "@/lib/api-auth";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -40,12 +41,31 @@ const allowedCurrencies = [
   "AFN",
 ] as const;
 
-async function getSettings() {
-  let settings = await prisma.settings.findFirst();
+function isValidTimezone(timezone: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+    }).format(new Date());
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getSettings(businessId: string) {
+  let settings = await prisma.settings.findUnique({
+    where: {
+      businessId,
+    },
+  });
 
   if (!settings) {
     settings = await prisma.settings.create({
-      data: defaultSettings,
+      data: {
+        ...defaultSettings,
+        businessId,
+      },
     });
   }
 
@@ -68,9 +88,27 @@ export async function GET() {
   }
 
   try {
-    const settings = await getSettings();
+    const businessContext = await getCurrentBusinessContext();
 
-    return Response.json(settings);
+    if (!businessContext) {
+      return Response.json(
+        {
+          error: "Business not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const settings = await getSettings(
+      businessContext.business.id
+    );
+
+    return Response.json({
+      ...settings,
+      timezone: businessContext.business.timezone,
+    });
   } catch (error) {
     console.error(
       "Failed to load settings:",
@@ -104,6 +142,19 @@ export async function PUT(request: Request) {
   }
 
   try {
+    const businessContext = await getCurrentBusinessContext();
+
+    if (!businessContext) {
+      return Response.json(
+        {
+          error: "Business not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
     const body = await request.json();
 
     const businessName = String(
@@ -120,6 +171,10 @@ export async function PUT(request: Request) {
 
     const currency = String(
       body.currency ?? ""
+    ).trim();
+
+    const timezone = String(
+      body.timezone ?? ""
     ).trim();
 
     const defaultAppointmentStatus =
@@ -139,8 +194,7 @@ export async function PUT(request: Request) {
     if (!businessName) {
       return Response.json(
         {
-          error:
-            "Business name is required",
+          error: "Business name is required",
         },
         {
           status: 400,
@@ -151,8 +205,7 @@ export async function PUT(request: Request) {
     if (!businessType) {
       return Response.json(
         {
-          error:
-            "Business type is required",
+          error: "Business type is required",
         },
         {
           status: 400,
@@ -209,8 +262,35 @@ export async function PUT(request: Request) {
       );
     }
 
+    if (!timezone) {
+      return Response.json(
+        {
+          error: "Timezone is required",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
+    if (!isValidTimezone(timezone)) {
+      return Response.json(
+        {
+          error: "Invalid timezone",
+        },
+        {
+          status: 400,
+        }
+      );
+    }
+
     const existingSettings =
-      await prisma.settings.findFirst();
+      await prisma.settings.findUnique({
+        where: {
+          businessId:
+            businessContext.business.id,
+        },
+      });
 
     const settings =
       existingSettings
@@ -236,6 +316,8 @@ export async function PUT(request: Request) {
           })
         : await prisma.settings.create({
             data: {
+              businessId:
+                businessContext.business.id,
               businessName,
               businessType,
               bookingEnabled,
@@ -252,7 +334,21 @@ export async function PUT(request: Request) {
             },
           });
 
-    return Response.json(settings);
+    const updatedBusiness =
+      await prisma.business.update({
+        where: {
+          id: businessContext.business.id,
+        },
+        data: {
+          name: businessName,
+          timezone,
+        },
+      });
+
+    return Response.json({
+      ...settings,
+      timezone: updatedBusiness.timezone,
+    });
   } catch (error) {
     console.error(
       "Failed to update settings:",

@@ -394,15 +394,15 @@ export default function BookingPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            name: trimmedName,
-            email: trimmedEmail,
-            phone: trimmedPhone,
-            serviceId: selectedService.id,
-            date: selectedDate,
-            time: selectedTime,
-            notes: trimmedNotes,
-          }),
+         body: JSON.stringify({
+  customerName: trimmedName,
+  customerEmail: trimmedEmail,
+  customerPhone: trimmedPhone,
+  serviceId: selectedService.id,
+  date: selectedDate,
+  time: selectedTime,
+  notes: trimmedNotes,
+}),
         }
       );
 
