@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   AppointmentFormValues,
 } from "@/components/dashboard/AppointmentForm";
+import { AppointmentCalendar } from "@/components/dashboard/AppointmentCalendar";
 import { AppointmentDialog } from "@/components/dashboard/AppointmentDialog";
 import { AppointmentTable } from "@/components/dashboard/AppointmentTable";
 import { Appointment } from "@/types/appointment";
@@ -368,12 +369,18 @@ export function AppointmentsManager() {
           Loading appointments...
         </div>
       ) : (
-        <AppointmentTable
-          appointments={appointments}
-          onEdit={handleEditAppointment}
-          onDelete={handleDeleteAppointment}
-          onStatusChange={handleStatusChange}
-        />
+        <div className="space-y-8">
+          <AppointmentCalendar
+            appointments={appointments}
+          />
+
+          <AppointmentTable
+            appointments={appointments}
+            onEdit={handleEditAppointment}
+            onDelete={handleDeleteAppointment}
+            onStatusChange={handleStatusChange}
+          />
+        </div>
       )}
     </>
   );
