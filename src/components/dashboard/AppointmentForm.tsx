@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Clock,
   UserRound,
+  UserCog,
   Wrench,
 } from "lucide-react";
 
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 export type AppointmentFormValues = {
   customer: string;
   service: string;
+  staffId: string;
   date: string;
   time: string;
 };
@@ -35,6 +37,14 @@ type Service = {
   active: boolean;
 };
 
+type Staff = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  active: boolean;
+};
+
 type FormErrors = Partial<
   Record<keyof AppointmentFormValues, string>
 >;
@@ -42,6 +52,7 @@ type FormErrors = Partial<
 const emptyForm: AppointmentFormValues = {
   customer: "",
   service: "",
+  staffId: "",
   date: "",
   time: "",
 };
@@ -74,7 +85,14 @@ export function AppointmentForm({
   const [loadingServices, setLoadingServices] =
     useState(true);
 
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loadingStaff, setLoadingStaff] =
+    useState(true);
+
   const [serviceLoadError, setServiceLoadError] =
+    useState("");
+
+  const [staffLoadError, setStaffLoadError] =
     useState("");
 
   const [errors, setErrors] =
@@ -138,6 +156,67 @@ export function AppointmentForm({
     }
 
     loadServices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStaff() {
+      try {
+        setLoadingStaff(true);
+        setStaffLoadError("");
+
+        const response = await fetch(
+          "/api/staff",
+          {
+            cache: "no-store",
+          }
+        );
+
+        if (!response.ok) {
+          const message = await getApiError(
+            response,
+            "Failed to load staff."
+          );
+
+          throw new Error(message);
+        }
+
+        const data =
+          (await response.json()) as Staff[];
+
+        if (!cancelled) {
+          setStaff(
+            data.filter(
+              (member) => member.active
+            )
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to load staff:",
+          error
+        );
+
+        if (!cancelled) {
+          setStaffLoadError(
+            error instanceof Error
+              ? error.message
+              : "Failed to load staff."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingStaff(false);
+        }
+      }
+    }
+
+    loadStaff();
 
     return () => {
       cancelled = true;
@@ -214,6 +293,7 @@ export function AppointmentForm({
       await onSubmit({
         customer: form.customer.trim(),
         service: form.service.trim(),
+        staffId: form.staffId,
         date: form.date,
         time: form.time,
       });
@@ -251,8 +331,8 @@ export function AppointmentForm({
             </p>
 
             <p className="mt-1 text-xs leading-5 text-blue-700 dark:text-blue-300">
-              Enter the customer, service, date and
-              time for this appointment.
+              Enter the customer, service, staff,
+              date and time for this appointment.
             </p>
           </div>
         </div>
@@ -378,6 +458,66 @@ export function AppointmentForm({
             {errors.service}
           </p>
         )}
+      </div>
+
+      <div className="space-y-2">
+        <Label
+          htmlFor="appointment-staff"
+          className="flex items-center gap-2"
+        >
+          <UserCog
+            className="h-4 w-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+          Staff
+        </Label>
+
+        <select
+          id="appointment-staff"
+          name="staffId"
+          value={form.staffId}
+          onChange={(event) =>
+            updateField(
+              "staffId",
+              event.target.value
+            )
+          }
+          disabled={
+            submitting || loadingStaff
+          }
+          className={`${inputClass} w-full px-3 text-sm`}
+        >
+          <option value="">
+            {loadingStaff
+              ? "Loading staff..."
+              : "No staff assigned"}
+          </option>
+
+          {staff.map((member) => (
+            <option
+              key={member.id}
+              value={member.id}
+            >
+              {member.name}
+            </option>
+          ))}
+        </select>
+
+        {staffLoadError && (
+          <p className="text-xs font-medium text-red-600">
+            {staffLoadError}
+          </p>
+        )}
+
+        {!loadingStaff &&
+          !staffLoadError &&
+          staff.length === 0 && (
+            <p className="text-xs font-medium text-muted-foreground">
+              No active staff members are
+              available. You can leave this
+              appointment unassigned.
+            </p>
+          )}
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">

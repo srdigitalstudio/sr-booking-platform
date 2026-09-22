@@ -157,8 +157,6 @@ async function getSettings(
   });
 }
 
-
-
 async function findService(
   businessId: string,
   serviceName: string
@@ -170,6 +168,19 @@ async function findService(
         equals: serviceName,
         mode: "insensitive",
       },
+      active: true,
+    },
+  });
+}
+
+async function findStaff(
+  businessId: string,
+  staffId: string
+) {
+  return prisma.staff.findFirst({
+    where: {
+      id: staffId,
+      businessId,
       active: true,
     },
   });
@@ -211,6 +222,7 @@ export async function GET() {
         include: {
           customer: true,
           service: true,
+          staff: true,
         },
         orderBy: [
           {
@@ -279,6 +291,9 @@ export async function POST(
 
     const time =
       normalizeText(body.time);
+
+    const staffId =
+      normalizeText(body.staffId);
 
     if (
       !customer ||
@@ -358,6 +373,23 @@ export async function POST(
       );
     }
 
+    let staffRecord = null;
+
+    if (staffId) {
+      staffRecord =
+        await findStaff(
+          businessId,
+          staffId
+        );
+
+      if (!staffRecord) {
+        return jsonError(
+          "Staff member not found or inactive.",
+          404
+        );
+      }
+    }
+
     const appointment =
       await prisma.$transaction(
         async (tx) => {
@@ -417,6 +449,8 @@ export async function POST(
                 customerRecord.id,
               serviceId:
                 serviceRecord.id,
+              staffId:
+                staffRecord?.id ?? null,
               date: appointmentDate,
               time,
               status:
@@ -425,6 +459,7 @@ export async function POST(
             include: {
               customer: true,
               service: true,
+              staff: true,
             },
           });
         }
@@ -543,6 +578,7 @@ export async function PATCH(
           include: {
             customer: true,
             service: true,
+            staff: true,
           },
         });
 
@@ -562,6 +598,9 @@ export async function PATCH(
 
     const time =
       normalizeText(body.time);
+
+    const staffId =
+      normalizeText(body.staffId);
 
     if (
       !customer ||
@@ -631,6 +670,23 @@ export async function PATCH(
       );
     }
 
+    let staffRecord = null;
+
+    if (staffId) {
+      staffRecord =
+        await findStaff(
+          businessId,
+          staffId
+        );
+
+      if (!staffRecord) {
+        return jsonError(
+          "Staff member not found or inactive.",
+          404
+        );
+      }
+    }
+
     const appointmentUpdate =
       await prisma.$transaction(
         async (tx) => {
@@ -694,12 +750,15 @@ export async function PATCH(
                 customerRecord.id,
               serviceId:
                 serviceRecord.id,
+              staffId:
+                staffRecord?.id ?? null,
               date: appointmentDate,
               time,
             },
             include: {
               customer: true,
               service: true,
+              staff: true,
             },
           });
         }

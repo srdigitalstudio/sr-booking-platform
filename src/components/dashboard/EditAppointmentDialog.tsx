@@ -104,6 +104,7 @@ export function EditAppointmentDialog({
             initialValues={{
               customer: appointment.customer,
               service: appointment.service,
+              staffId: appointment.staffId,
               date: appointment.date,
               time: appointment.time,
             }}

@@ -26,6 +26,9 @@ type ApiAppointment = {
   service: {
     name: string;
   };
+  staff: {
+    id: string;
+  } | null;
 };
 
 type ToastType = "success" | "error";
@@ -42,6 +45,7 @@ function mapAppointment(
     id: appointment.id,
     customer: appointment.customer.name,
     service: appointment.service.name,
+    staffId: appointment.staff?.id ?? "",
     date: appointment.date.slice(0, 10),
     time: appointment.time,
     status:
