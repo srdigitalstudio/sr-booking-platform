@@ -8,6 +8,7 @@ import {
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
+import { getCurrentBusinessContext } from "@/lib/auth";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import {
   Card,
@@ -30,31 +31,51 @@ type AppointmentStatus =
   | "completed"
   | "cancelled";
 
-function formatDate(date: Date) {
+function formatDate(
+  date: Date,
+  timeZone: string
+) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone,
   }).format(date);
 }
 
-function getTodayRange() {
+function getTodayRange(timeZone: string) {
   const now = new Date();
 
+  const formatter = new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  );
+
+  const parts = formatter.formatToParts(now);
+
+  const year = Number(
+    parts.find((part) => part.type === "year")?.value
+  );
+
+  const month = Number(
+    parts.find((part) => part.type === "month")?.value
+  );
+
+  const day = Number(
+    parts.find((part) => part.type === "day")?.value
+  );
+
   const start = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate()
-    )
+    Date.UTC(year, month - 1, day)
   );
 
   const end = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate() + 1
-    )
+    Date.UTC(year, month - 1, day + 1)
   );
 
   return {
@@ -64,7 +85,18 @@ function getTodayRange() {
 }
 
 export async function RecentAppointments() {
-  const { start, end } = getTodayRange();
+  const businessContext =
+    await getCurrentBusinessContext();
+
+  if (!businessContext) {
+    return null;
+  }
+
+  const businessId = businessContext.business.id;
+  const timeZone =
+    businessContext.business.timezone || "UTC";
+
+  const { start, end } = getTodayRange(timeZone);
 
   const [
     todayAppointments,
@@ -73,6 +105,7 @@ export async function RecentAppointments() {
   ] = await Promise.all([
     prisma.appointment.findMany({
       where: {
+        businessId,
         date: {
           gte: start,
           lt: end,
@@ -90,6 +123,7 @@ export async function RecentAppointments() {
 
     prisma.appointment.findMany({
       where: {
+        businessId,
         date: {
           gte: end,
         },
@@ -110,6 +144,9 @@ export async function RecentAppointments() {
     }),
 
     prisma.appointment.findMany({
+      where: {
+        businessId,
+      },
       include: {
         customer: true,
         service: true,
@@ -172,7 +209,10 @@ export async function RecentAppointments() {
                   }
                   date={appointment.date}
                   time={appointment.time}
-                  status={appointment.status.toLowerCase() as AppointmentStatus}
+                  timeZone={timeZone}
+                  status={
+                    appointment.status.toLowerCase() as AppointmentStatus
+                  }
                 />
               ))}
             </div>
@@ -234,6 +274,7 @@ export async function RecentAppointments() {
                     }
                     date={appointment.date}
                     time={appointment.time}
+                    timeZone={timeZone}
                     status={
                       appointment.status.toLowerCase() as AppointmentStatus
                     }
@@ -321,9 +362,7 @@ export async function RecentAppointments() {
                               <div className="flex items-center gap-3">
                                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                                   {getInitials(
-                                    appointment
-                                      .customer
-                                      .name
+                                    appointment.customer.name
                                   )}
                                 </div>
 
@@ -352,7 +391,8 @@ export async function RecentAppointments() {
 
                             <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-card-foreground">
                               {formatDate(
-                                appointment.date
+                                appointment.date,
+                                timeZone
                               )}
                             </td>
 
@@ -388,17 +428,14 @@ export async function RecentAppointments() {
                           <div className="flex min-w-0 items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                               {getInitials(
-                                appointment
-                                  .customer
-                                  .name
+                                appointment.customer.name
                               )}
                             </div>
 
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">
                                 {
-                                  appointment
-                                    .customer
+                                  appointment.customer
                                     .name
                                 }
                               </p>
@@ -424,7 +461,8 @@ export async function RecentAppointments() {
                               aria-hidden="true"
                             />
                             {formatDate(
-                              appointment.date
+                              appointment.date,
+                              timeZone
                             )}
                           </span>
 
@@ -454,12 +492,14 @@ function AppointmentRow({
   serviceName,
   date,
   time,
+  timeZone,
   status,
 }: {
   customerName: string;
   serviceName: string;
   date: Date;
   time: string;
+  timeZone: string;
   status: AppointmentStatus;
 }) {
   return (
@@ -489,7 +529,9 @@ function AppointmentRow({
             className="h-3.5 w-3.5"
             aria-hidden="true"
           />
-          <span>{formatDate(date)}</span>
+          <span>
+            {formatDate(date, timeZone)}
+          </span>
         </div>
 
         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">

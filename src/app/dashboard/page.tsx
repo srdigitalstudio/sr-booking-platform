@@ -13,6 +13,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 
 import { RecentAppointments } from "@/components/dashboard/RecentAppointments";
 import { StatCard } from "@/components/dashboard/StatCard";
+import { getCurrentBusinessContext } from "@/lib/auth";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -23,6 +24,26 @@ const prisma = new PrismaClient({
 });
 
 export default async function DashboardPage() {
+  const businessContext =
+    await getCurrentBusinessContext();
+
+  if (!businessContext) {
+    return (
+      <div className="rounded-2xl border bg-white p-8 shadow-sm">
+        <h1 className="text-2xl font-bold">
+          Business not found
+        </h1>
+
+        <p className="mt-2 text-sm text-muted-foreground">
+          No active business is available for your
+          account.
+        </p>
+      </div>
+    );
+  }
+
+  const businessId = businessContext.business.id;
+
   const [
     appointmentsCount,
     pendingAppointments,
@@ -34,42 +55,56 @@ export default async function DashboardPage() {
     completedAppointments,
     settings,
   ] = await Promise.all([
-    prisma.appointment.count(),
+    prisma.appointment.count({
+      where: {
+        businessId,
+      },
+    }),
 
     prisma.appointment.count({
       where: {
+        businessId,
         status: "PENDING",
       },
     }),
 
     prisma.appointment.count({
       where: {
+        businessId,
         status: "CONFIRMED",
       },
     }),
 
     prisma.appointment.count({
       where: {
+        businessId,
         status: "COMPLETED",
       },
     }),
 
     prisma.appointment.count({
       where: {
+        businessId,
         status: "CANCELLED",
       },
     }),
 
-    prisma.customer.count(),
+    prisma.customer.count({
+      where: {
+        businessId,
+      },
+    }),
 
     prisma.service.count({
       where: {
+        businessId,
         active: true,
       },
     }),
 
     prisma.appointment.findMany({
       where: {
+        businessId,
         status: "COMPLETED",
       },
       select: {
@@ -81,7 +116,10 @@ export default async function DashboardPage() {
       },
     }),
 
-    prisma.settings.findFirst({
+    prisma.settings.findUnique({
+      where: {
+        businessId,
+      },
       select: {
         currency: true,
         businessName: true,
@@ -91,14 +129,18 @@ export default async function DashboardPage() {
 
   const revenue = completedAppointments.reduce(
     (total, appointment) => {
-      return total + Number(appointment.service.price ?? 0);
+      return total + Number(
+        appointment.service.price ?? 0
+      );
     },
     0
   );
 
   const currency = settings?.currency ?? "USD";
   const businessName =
-    settings?.businessName ?? "SR Booking";
+    settings?.businessName ??
+    businessContext.business.name ??
+    "SR Booking";
 
   const currencyFormatter = new Intl.NumberFormat(
     "en-US",
