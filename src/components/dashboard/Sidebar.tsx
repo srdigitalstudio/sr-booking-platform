@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Settings,
   Scissors,
+  UserRound,
   Users,
 } from "lucide-react";
 
@@ -32,6 +33,12 @@ const navigation = [
     href: "/dashboard/customers",
     icon: Users,
     description: "Customer directory",
+  },
+  {
+    name: "Staff",
+    href: "/dashboard/staff",
+    icon: UserRound,
+    description: "Manage team members",
   },
   {
     name: "Services",
@@ -272,7 +279,7 @@ export function Sidebar({
           <div className="mt-3 h-px bg-sidebar-border" />
 
           <p className="mt-3 text-[10px] leading-4 text-muted-foreground">
-            Manage your appointments, customers and services from one place.
+            Manage your appointments, customers, staff and services from one place.
           </p>
         </div>
       </div>
