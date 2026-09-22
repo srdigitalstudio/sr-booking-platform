@@ -23,6 +23,108 @@ const prisma = new PrismaClient({
   adapter,
 });
 
+function getTimeZoneParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter(
+        (part) =>
+          part.type === "year" ||
+          part.type === "month" ||
+          part.type === "day"
+      )
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  return {
+    year: values.year,
+    month: values.month,
+    day: values.day,
+  };
+}
+
+function getTimeZoneOffset(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter(
+        (part) =>
+          part.type === "year" ||
+          part.type === "month" ||
+          part.type === "day" ||
+          part.type === "hour" ||
+          part.type === "minute" ||
+          part.type === "second"
+      )
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  const asUtc = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+
+  return asUtc - date.getTime();
+}
+
+function getStartOfMonth(timeZone: string) {
+  const now = new Date();
+  const { year, month } = getTimeZoneParts(now, timeZone);
+
+  const localMonthStart = Date.UTC(year, month - 1, 1);
+  const firstGuess = new Date(localMonthStart);
+
+  const firstOffset = getTimeZoneOffset(firstGuess, timeZone);
+  const firstResult = new Date(localMonthStart - firstOffset);
+
+  const finalOffset = getTimeZoneOffset(firstResult, timeZone);
+
+  return new Date(localMonthStart - finalOffset);
+}
+
+function getStartOfNextMonth(timeZone: string) {
+  const now = new Date();
+  const { year, month } = getTimeZoneParts(now, timeZone);
+
+  const nextYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+
+  const localMonthStart = Date.UTC(
+    nextYear,
+    nextMonth - 1,
+    1
+  );
+
+  const firstGuess = new Date(localMonthStart);
+
+  const firstOffset = getTimeZoneOffset(firstGuess, timeZone);
+  const firstResult = new Date(localMonthStart - firstOffset);
+
+  const finalOffset = getTimeZoneOffset(firstResult, timeZone);
+
+  return new Date(localMonthStart - finalOffset);
+}
+
 export default async function DashboardPage() {
   const businessContext =
     await getCurrentBusinessContext();
@@ -43,6 +145,12 @@ export default async function DashboardPage() {
   }
 
   const businessId = businessContext.business.id;
+  const timeZone =
+    businessContext.business.timezone || "UTC";
+
+  const monthStart = getStartOfMonth(timeZone);
+  const nextMonthStart =
+    getStartOfNextMonth(timeZone);
 
   const [
     appointmentsCount,
@@ -53,6 +161,7 @@ export default async function DashboardPage() {
     customersCount,
     servicesCount,
     completedAppointments,
+    monthlyCompletedAppointments,
     settings,
   ] = await Promise.all([
     prisma.appointment.count({
@@ -116,6 +225,24 @@ export default async function DashboardPage() {
       },
     }),
 
+    prisma.appointment.findMany({
+      where: {
+        businessId,
+        status: "COMPLETED",
+        date: {
+          gte: monthStart,
+          lt: nextMonthStart,
+        },
+      },
+      select: {
+        service: {
+          select: {
+            price: true,
+          },
+        },
+      },
+    }),
+
     prisma.settings.findUnique({
       where: {
         businessId,
@@ -129,12 +256,24 @@ export default async function DashboardPage() {
 
   const revenue = completedAppointments.reduce(
     (total, appointment) => {
-      return total + Number(
-        appointment.service.price ?? 0
+      return (
+        total +
+        Number(appointment.service.price ?? 0)
       );
     },
     0
   );
+
+  const monthlyRevenue =
+    monthlyCompletedAppointments.reduce(
+      (total, appointment) => {
+        return (
+          total +
+          Number(appointment.service.price ?? 0)
+        );
+      },
+      0
+    );
 
   const currency = settings?.currency ?? "USD";
   const businessName =
@@ -234,7 +373,7 @@ export default async function DashboardPage() {
         <StatCard
           title="Revenue"
           value={currencyFormatter.format(revenue)}
-          description="Completed appointments"
+          description="All completed appointments"
           icon={CreditCard}
         />
 
@@ -243,6 +382,29 @@ export default async function DashboardPage() {
           value={servicesCount.toString()}
           description="Currently available"
           icon={Scissors}
+        />
+      </section>
+
+      {/* Monthly revenue */}
+      <section aria-label="Monthly revenue">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold tracking-tight">
+            This Month
+          </h2>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Revenue from completed appointments this
+            month.
+          </p>
+        </div>
+
+        <StatCard
+          title="Monthly Revenue"
+          value={currencyFormatter.format(
+            monthlyRevenue
+          )}
+          description="Completed appointments this month"
+          icon={CreditCard}
         />
       </section>
 
