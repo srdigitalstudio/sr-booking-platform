@@ -11,9 +11,16 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { AddServiceDialog } from "@/components/dashboard/AddServiceDialog";
 import { ServiceFormValues } from "@/components/dashboard/ServiceForm";
 import { ServiceTable } from "@/components/dashboard/ServiceTable";
+import { getCurrentBusinessContext } from "@/lib/auth";
+
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not configured.");
+}
 
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 const prisma = new PrismaClient({
@@ -21,7 +28,18 @@ const prisma = new PrismaClient({
 });
 
 export default async function ServicesPage() {
+  const context = await getCurrentBusinessContext();
+
+  if (!context) {
+    return null;
+  }
+
+  const businessId = context.business.id;
+
   const services = await prisma.service.findMany({
+    where: {
+      businessId,
+    },
     orderBy: {
       createdAt: "desc",
     },
@@ -35,8 +53,18 @@ export default async function ServicesPage() {
   ) {
     "use server";
 
+    const context =
+      await getCurrentBusinessContext();
+
+    if (!context) {
+      throw new Error("Unauthorized.");
+    }
+
+    const businessId = context.business.id;
+
     const name = values.name.trim();
-    const description = values.description.trim();
+    const description =
+      values.description.trim();
 
     if (!name) {
       throw new Error(
@@ -60,7 +88,8 @@ export default async function ServicesPage() {
 
     if (
       price !== null &&
-      (!Number.isFinite(price) || price < 0)
+      (!Number.isFinite(price) ||
+        price < 0)
     ) {
       throw new Error(
         "Price must be a valid positive number."
@@ -70,16 +99,22 @@ export default async function ServicesPage() {
     try {
       await prisma.service.create({
         data: {
+          businessId,
           name,
-          description: description || null,
+          description:
+            description || null,
           duration: values.duration,
           price,
           active: values.active,
         },
       });
 
-      revalidatePath("/dashboard/services");
-      revalidatePath("/dashboard/appointments");
+      revalidatePath(
+        "/dashboard/services"
+      );
+      revalidatePath(
+        "/dashboard/appointments"
+      );
     } catch (error) {
       console.error(
         "Failed to create service:",
@@ -98,9 +133,19 @@ export default async function ServicesPage() {
   ) {
     "use server";
 
+    const context =
+      await getCurrentBusinessContext();
+
+    if (!context) {
+      throw new Error("Unauthorized.");
+    }
+
+    const businessId = context.business.id;
+
     const serviceId = id.trim();
     const name = values.name.trim();
-    const description = values.description.trim();
+    const description =
+      values.description.trim();
 
     if (!serviceId) {
       throw new Error(
@@ -130,7 +175,8 @@ export default async function ServicesPage() {
 
     if (
       price !== null &&
-      (!Number.isFinite(price) || price < 0)
+      (!Number.isFinite(price) ||
+        price < 0)
     ) {
       throw new Error(
         "Price must be a valid positive number."
@@ -138,21 +184,34 @@ export default async function ServicesPage() {
     }
 
     try {
-      await prisma.service.update({
-        where: {
-          id: serviceId,
-        },
-        data: {
-          name,
-          description: description || null,
-          duration: values.duration,
-          price,
-          active: values.active,
-        },
-      });
+      const result =
+        await prisma.service.updateMany({
+          where: {
+            id: serviceId,
+            businessId,
+          },
+          data: {
+            name,
+            description:
+              description || null,
+            duration: values.duration,
+            price,
+            active: values.active,
+          },
+        });
 
-      revalidatePath("/dashboard/services");
-      revalidatePath("/dashboard/appointments");
+      if (result.count === 0) {
+        throw new Error(
+          "Service not found."
+        );
+      }
+
+      revalidatePath(
+        "/dashboard/services"
+      );
+      revalidatePath(
+        "/dashboard/appointments"
+      );
     } catch (error) {
       console.error(
         "Failed to update service:",
@@ -165,22 +224,26 @@ export default async function ServicesPage() {
     }
   }
 
-  const activeServices = services.filter(
-    (service) => service.active
-  );
+  const activeServices =
+    services.filter(
+      (service) => service.active
+    );
 
-  const inactiveServices = services.filter(
-    (service) => !service.active
-  );
+  const inactiveServices =
+    services.filter(
+      (service) => !service.active
+    );
 
-  const totalBookings = services.reduce(
-    (total, service) =>
-      total + service.appointments.length,
-    0
-  );
+  const totalBookings =
+    services.reduce(
+      (total, service) =>
+        total +
+        service.appointments.length,
+      0
+    );
 
-  const tableServices = services.map(
-    (service) => ({
+  const tableServices =
+    services.map((service) => ({
       id: service.id,
       name: service.name,
       description: service.description,
@@ -190,9 +253,9 @@ export default async function ServicesPage() {
           ? null
           : service.price.toString(),
       active: service.active,
-      appointments: service.appointments,
-    })
-  );
+      appointments:
+        service.appointments,
+    }));
 
   return (
     <div className="space-y-8">
@@ -205,7 +268,9 @@ export default async function ServicesPage() {
               aria-hidden="true"
             />
 
-            <span>Service Management</span>
+            <span>
+              Service Management
+            </span>
           </div>
 
           <div className="flex items-start gap-3">
@@ -222,8 +287,8 @@ export default async function ServicesPage() {
               </h1>
 
               <p className="mt-1.5 text-sm text-muted-foreground sm:text-base">
-                Manage the services customers can
-                book.
+                Manage the services
+                customers can book.
               </p>
             </div>
           </div>
@@ -371,8 +436,8 @@ export default async function ServicesPage() {
               </h2>
 
               <p className="mt-0.5 text-sm text-muted-foreground">
-                View and manage all your booking
-                services.
+                View and manage all your
+                booking services.
               </p>
             </div>
           </div>

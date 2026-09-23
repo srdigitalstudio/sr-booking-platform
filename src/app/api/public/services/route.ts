@@ -28,34 +28,40 @@ if (process.env.NODE_ENV !== "production") {
 
 export async function GET() {
   try {
-    const settings =
-      await prisma.settings.findFirst();
+    const business = await prisma.business.findFirst({
+      where: {
+        active: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+      },
+    });
 
-    if (
-      settings &&
-      !settings.bookingEnabled
-    ) {
+    if (!business) {
       return NextResponse.json([]);
     }
 
-    const services =
-      await prisma.service.findMany({
-        where: {
-          active: true,
+    const services = await prisma.service.findMany({
+      where: {
+        businessId: business.id,
+        active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        duration: true,
+        price: true,
+      },
+      orderBy: [
+        {
+          name: "asc",
         },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          duration: true,
-          price: true,
-        },
-        orderBy: [
-          {
-            name: "asc",
-          },
-        ],
-      });
+      ],
+    });
 
     return NextResponse.json(services);
   } catch (error) {
@@ -66,8 +72,7 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error:
-          "Unable to load available services.",
+        error: "Unable to load available services.",
       },
       {
         status: 500,

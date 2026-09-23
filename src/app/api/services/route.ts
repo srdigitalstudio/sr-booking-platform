@@ -3,14 +3,25 @@ import { NextResponse } from "next/server";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
-import { requireApiUser } from "@/lib/api-auth";
+import {
+  getCurrentBusinessContext,
+} from "@/lib/auth";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+const connectionString =
+  process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error(
+    "DATABASE_URL is not configured."
+  );
+}
+
 const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL,
+  connectionString,
 });
 
 const prisma =
@@ -24,9 +35,10 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export async function GET() {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return NextResponse.json(
       {
         error: "Unauthorized",
@@ -38,14 +50,19 @@ export async function GET() {
   }
 
   try {
-    const services = await prisma.service.findMany({
-      orderBy: {
-        createdAt: "desc",
-      },
-      include: {
-        appointments: true,
-      },
-    });
+    const services =
+      await prisma.service.findMany({
+        where: {
+          businessId:
+            context.business.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          appointments: true,
+        },
+      });
 
     return NextResponse.json(services);
   } catch (error) {
@@ -56,7 +73,8 @@ export async function GET() {
 
     return NextResponse.json(
       {
-        error: "Failed to load services",
+        error:
+          "Failed to load services",
       },
       {
         status: 500,
@@ -65,10 +83,13 @@ export async function GET() {
   }
 }
 
-export async function POST(request: Request) {
-  const user = await requireApiUser();
+export async function POST(
+  request: Request
+) {
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return NextResponse.json(
       {
         error: "Unauthorized",
@@ -154,6 +175,8 @@ export async function POST(request: Request) {
     const service =
       await prisma.service.create({
         data: {
+          businessId:
+            context.business.id,
           name,
           description:
             description || null,
@@ -190,10 +213,13 @@ export async function POST(request: Request) {
   }
 }
 
-export async function PUT(request: Request) {
-  const user = await requireApiUser();
+export async function PUT(
+  request: Request
+) {
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return NextResponse.json(
       {
         error: "Unauthorized",
@@ -293,9 +319,11 @@ export async function PUT(request: Request) {
     }
 
     const service =
-      await prisma.service.update({
+      await prisma.service.updateMany({
         where: {
           id,
+          businessId:
+            context.business.id,
         },
         data: {
           name,
@@ -305,13 +333,34 @@ export async function PUT(request: Request) {
           price,
           active,
         },
+      });
+
+    if (service.count === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Service not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const updatedService =
+      await prisma.service.findFirst({
+        where: {
+          id,
+          businessId:
+            context.business.id,
+        },
         include: {
           appointments: true,
         },
       });
 
     return NextResponse.json(
-      service
+      updatedService
     );
   } catch (error) {
     console.error(
@@ -334,9 +383,10 @@ export async function PUT(request: Request) {
 export async function DELETE(
   request: Request
 ) {
-  const user = await requireApiUser();
+  const context =
+    await getCurrentBusinessContext();
 
-  if (!user) {
+  if (!context) {
     return NextResponse.json(
       {
         error: "Unauthorized",
@@ -366,11 +416,26 @@ export async function DELETE(
       );
     }
 
-    await prisma.service.delete({
-      where: {
-        id,
-      },
-    });
+    const service =
+      await prisma.service.deleteMany({
+        where: {
+          id,
+          businessId:
+            context.business.id,
+        },
+      });
+
+    if (service.count === 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Service not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
 
     return NextResponse.json({
       success: true,
