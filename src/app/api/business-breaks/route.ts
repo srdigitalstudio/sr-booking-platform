@@ -532,6 +532,9 @@ export async function PUT(
           id,
           businessId,
         },
+        select: {
+          id: true,
+        },
       });
 
     if (!existing) {
@@ -587,16 +590,37 @@ export async function PUT(
       );
     }
 
-    const businessBreak =
-      await prisma.businessBreak.update({
+    const result =
+      await prisma.businessBreak.updateMany({
         where: {
           id,
+          businessId,
         },
         data: {
           dayOfWeek,
           startTime,
           endTime,
           label,
+        },
+      });
+
+    if (result.count !== 1) {
+      return Response.json(
+        {
+          error:
+            "Business break not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const businessBreak =
+      await prisma.businessBreak.findFirst({
+        where: {
+          id,
+          businessId,
         },
       });
 
@@ -654,15 +678,15 @@ export async function DELETE(
       );
     }
 
-    const existing =
-      await prisma.businessBreak.findFirst({
+    const result =
+      await prisma.businessBreak.deleteMany({
         where: {
           id,
           businessId,
         },
       });
 
-    if (!existing) {
+    if (result.count !== 1) {
       return Response.json(
         {
           error:
@@ -673,12 +697,6 @@ export async function DELETE(
         }
       );
     }
-
-    await prisma.businessBreak.delete({
-      where: {
-        id,
-      },
-    });
 
     return Response.json({
       success: true,
