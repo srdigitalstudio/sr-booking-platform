@@ -6,6 +6,7 @@ import {
   Check,
   Clock3,
   Loader2,
+  Pencil,
   Plus,
   Save,
   Trash2,
@@ -114,11 +115,20 @@ export function AvailabilitySettings() {
   const [savingDay, setSavingDay] = useState<DayOfWeek | null>(null);
   const [savingBreak, setSavingBreak] = useState(false);
   const [savingBlockedDate, setSavingBlockedDate] = useState(false);
+  const [editingBreakId, setEditingBreakId] = useState<string | null>(null);
+  const [savingEditedBreak, setSavingEditedBreak] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const [breakDraft, setBreakDraft] = useState<BreakDraft>({
+    dayOfWeek: "SATURDAY",
+    startTime: "13:00",
+    endTime: "14:00",
+    label: "",
+  });
+
+  const [editBreakDraft, setEditBreakDraft] = useState<BreakDraft>({
     dayOfWeek: "SATURDAY",
     startTime: "13:00",
     endTime: "14:00",
@@ -337,6 +347,10 @@ export function AvailabilitySettings() {
         current.filter((item) => item.id !== id)
       );
 
+      if (editingBreakId === id) {
+        setEditingBreakId(null);
+      }
+
       setMessage("Break removed successfully.");
     } catch (err) {
       console.error(err);
@@ -346,6 +360,112 @@ export function AvailabilitySettings() {
           ? err.message
           : "Unable to delete break."
       );
+    }
+  }
+
+  function startEditingBreak(item: BusinessBreak) {
+    clearFeedback();
+
+    setEditingBreakId(item.id);
+
+    setEditBreakDraft({
+      dayOfWeek: item.dayOfWeek,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      label: item.label ?? "",
+    });
+  }
+
+  function cancelEditingBreak() {
+    setEditingBreakId(null);
+
+    setEditBreakDraft({
+      dayOfWeek: "SATURDAY",
+      startTime: "13:00",
+      endTime: "14:00",
+      label: "",
+    });
+  }
+
+  async function updateBreak(id: string) {
+    try {
+      setSavingEditedBreak(true);
+      clearFeedback();
+
+      if (
+        !isTimeRangeValid(
+          editBreakDraft.startTime,
+          editBreakDraft.endTime
+        )
+      ) {
+        throw new Error(
+          "Break start time must be earlier than end time."
+        );
+      }
+
+      const response = await fetch(
+        "/api/business-breaks",
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id,
+            dayOfWeek: editBreakDraft.dayOfWeek,
+            startTime: editBreakDraft.startTime,
+            endTime: editBreakDraft.endTime,
+            label: editBreakDraft.label.trim(),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          await getErrorMessage(
+            response,
+            "Failed to update break."
+          )
+        );
+      }
+
+      const updated =
+        (await response.json()) as BusinessBreak;
+
+      setBreaks((current) =>
+        [...current.filter((item) => item.id !== id), updated].sort(
+          (a, b) => {
+            if (a.dayOfWeek !== b.dayOfWeek) {
+              return (
+                DAYS.findIndex(
+                  (item) => item.value === a.dayOfWeek
+                ) -
+                DAYS.findIndex(
+                  (item) => item.value === b.dayOfWeek
+                )
+              );
+            }
+
+            return a.startTime.localeCompare(
+              b.startTime
+            );
+          }
+        )
+      );
+
+      setEditingBreakId(null);
+
+      setMessage("Break updated successfully.");
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update break."
+      );
+    } finally {
+      setSavingEditedBreak(false);
     }
   }
 
@@ -907,44 +1027,222 @@ export function AvailabilitySettings() {
             </div>
           ) : (
             <div className="space-y-2">
-              {breaks.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400">
-                      <Clock3 className="h-4 w-4" />
+              {breaks.map((item) => {
+                const isEditing =
+                  editingBreakId === item.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 dark:border-blue-900 dark:bg-blue-950/20"
+                    >
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Day
+                          </label>
+
+                          <select
+                            value={
+                              editBreakDraft.dayOfWeek
+                            }
+                            onChange={(event) =>
+                              setEditBreakDraft(
+                                (current) => ({
+                                  ...current,
+                                  dayOfWeek:
+                                    event.target
+                                      .value as DayOfWeek,
+                                })
+                              )
+                            }
+                            disabled={savingEditedBreak}
+                            className="h-11 w-full rounded-xl border border-slate-300 bg-background px-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 dark:border-slate-700"
+                          >
+                            {DAYS.map((day) => (
+                              <option
+                                key={day.value}
+                                value={day.value}
+                              >
+                                {day.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Start
+                          </label>
+
+                          <Input
+                            type="time"
+                            value={
+                              editBreakDraft.startTime
+                            }
+                            disabled={
+                              savingEditedBreak
+                            }
+                            onChange={(event) =>
+                              setEditBreakDraft(
+                                (current) => ({
+                                  ...current,
+                                  startTime:
+                                    event.target
+                                      .value,
+                                })
+                              )
+                            }
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            End
+                          </label>
+
+                          <Input
+                            type="time"
+                            value={
+                              editBreakDraft.endTime
+                            }
+                            disabled={
+                              savingEditedBreak
+                            }
+                            onChange={(event) =>
+                              setEditBreakDraft(
+                                (current) => ({
+                                  ...current,
+                                  endTime:
+                                    event.target
+                                      .value,
+                                })
+                              )
+                            }
+                          />
+                        </div>
+
+                        <div className="space-y-2 md:col-span-2 lg:col-span-1">
+                          <label className="text-sm font-medium">
+                            Label
+                          </label>
+
+                          <Input
+                            value={
+                              editBreakDraft.label
+                            }
+                            disabled={
+                              savingEditedBreak
+                            }
+                            onChange={(event) =>
+                              setEditBreakDraft(
+                                (current) => ({
+                                  ...current,
+                                  label:
+                                    event.target
+                                      .value,
+                                })
+                              )
+                            }
+                            placeholder="Lunch break"
+                            maxLength={200}
+                          />
+                        </div>
+
+                        <div className="flex items-end gap-2">
+                          <Button
+                            type="button"
+                            onClick={() =>
+                              updateBreak(item.id)
+                            }
+                            disabled={
+                              savingEditedBreak
+                            }
+                            className="flex-1 gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                          >
+                            {savingEditedBreak ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Save className="h-4 w-4" />
+                            )}
+
+                            Save
+                          </Button>
+
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={
+                              cancelEditingBreak
+                            }
+                            disabled={
+                              savingEditedBreak
+                            }
+                            className="gap-2"
+                          >
+                            <X className="h-4 w-4" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600 dark:bg-orange-950 dark:text-orange-400">
+                        <Clock3 className="h-4 w-4" />
+                      </div>
+
+                      <div>
+                        <p className="font-medium">
+                          {item.label || "Break"}
+                        </p>
+
+                        <p className="text-sm text-muted-foreground">
+                          {getDayLabel(
+                            item.dayOfWeek
+                          )}{" "}
+                          · {item.startTime} –{" "}
+                          {item.endTime}
+                        </p>
+                      </div>
                     </div>
 
-                    <div>
-                      <p className="font-medium">
-                        {item.label || "Break"}
-                      </p>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          startEditingBreak(item)
+                        }
+                        className="gap-2"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Button>
 
-                      <p className="text-sm text-muted-foreground">
-                        {getDayLabel(
-                          item.dayOfWeek
-                        )}{" "}
-                        · {item.startTime} –{" "}
-                        {item.endTime}
-                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          deleteBreak(item.id)
+                        }
+                        className="gap-2 text-red-600 hover:text-red-700 dark:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remove
+                      </Button>
                     </div>
                   </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      deleteBreak(item.id)
-                    }
-                    className="gap-2 text-red-600 hover:text-red-700 dark:text-red-400"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Remove
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
