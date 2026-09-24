@@ -135,14 +135,6 @@ export default async function CustomersPage() {
         error
       );
 
-      if (
-        error instanceof Error &&
-        error.message ===
-          "A customer with this email already exists."
-      ) {
-        throw error;
-      }
-
       throw new Error(
         "Failed to create customer. Please try again."
       );
@@ -235,16 +227,24 @@ export default async function CustomersPage() {
     }
 
     try {
-      await prisma.customer.update({
-        where: {
-          id,
-        },
-        data: {
-          name,
-          email: email || null,
-          phone: phone || null,
-        },
-      });
+      const result =
+        await prisma.customer.updateMany({
+          where: {
+            id,
+            businessId: currentBusinessId,
+          },
+          data: {
+            name,
+            email: email || null,
+            phone: phone || null,
+          },
+        });
+
+      if (result.count !== 1) {
+        throw new Error(
+          "Customer not found."
+        );
+      }
 
       revalidatePath("/dashboard/customers");
     } catch (error) {
@@ -252,6 +252,13 @@ export default async function CustomersPage() {
         "Failed to update customer:",
         error
       );
+
+      if (
+        error instanceof Error &&
+        error.message === "Customer not found."
+      ) {
+        throw error;
+      }
 
       throw new Error(
         "Failed to update customer. Please try again."
