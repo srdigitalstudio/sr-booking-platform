@@ -12,6 +12,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 
 import { RecentAppointments } from "@/components/dashboard/RecentAppointments";
+import { RevenueChart } from "@/components/dashboard/RevenueChart";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { getCurrentBusinessContext } from "@/lib/auth";
 
@@ -94,10 +95,19 @@ function getStartOfMonth(timeZone: string) {
   const localMonthStart = Date.UTC(year, month - 1, 1);
   const firstGuess = new Date(localMonthStart);
 
-  const firstOffset = getTimeZoneOffset(firstGuess, timeZone);
-  const firstResult = new Date(localMonthStart - firstOffset);
+  const firstOffset = getTimeZoneOffset(
+    firstGuess,
+    timeZone
+  );
 
-  const finalOffset = getTimeZoneOffset(firstResult, timeZone);
+  const firstResult = new Date(
+    localMonthStart - firstOffset
+  );
+
+  const finalOffset = getTimeZoneOffset(
+    firstResult,
+    timeZone
+  );
 
   return new Date(localMonthStart - finalOffset);
 }
@@ -117,12 +127,75 @@ function getStartOfNextMonth(timeZone: string) {
 
   const firstGuess = new Date(localMonthStart);
 
-  const firstOffset = getTimeZoneOffset(firstGuess, timeZone);
-  const firstResult = new Date(localMonthStart - firstOffset);
+  const firstOffset = getTimeZoneOffset(
+    firstGuess,
+    timeZone
+  );
 
-  const finalOffset = getTimeZoneOffset(firstResult, timeZone);
+  const firstResult = new Date(
+    localMonthStart - firstOffset
+  );
+
+  const finalOffset = getTimeZoneOffset(
+    firstResult,
+    timeZone
+  );
 
   return new Date(localMonthStart - finalOffset);
+}
+
+function getStartOfDay(date: Date, timeZone: string) {
+  const { year, month, day } = getTimeZoneParts(
+    date,
+    timeZone
+  );
+
+  const localDayStart = Date.UTC(
+    year,
+    month - 1,
+    day
+  );
+
+  const firstGuess = new Date(localDayStart);
+
+  const firstOffset = getTimeZoneOffset(
+    firstGuess,
+    timeZone
+  );
+
+  const firstResult = new Date(
+    localDayStart - firstOffset
+  );
+
+  const finalOffset = getTimeZoneOffset(
+    firstResult,
+    timeZone
+  );
+
+  return new Date(localDayStart - finalOffset);
+}
+
+function getDateKey(date: Date, timeZone: string) {
+  const { year, month, day } = getTimeZoneParts(
+    date,
+    timeZone
+  );
+
+  return `${year}-${String(month).padStart(
+    2,
+    "0"
+  )}-${String(day).padStart(2, "0")}`;
+}
+
+function formatChartDate(
+  date: Date,
+  timeZone: string
+) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    month: "short",
+    day: "numeric",
+  }).format(date);
 }
 
 export default async function DashboardPage() {
@@ -145,12 +218,20 @@ export default async function DashboardPage() {
   }
 
   const businessId = businessContext.business.id;
+
   const timeZone =
     businessContext.business.timezone || "UTC";
 
   const monthStart = getStartOfMonth(timeZone);
+
   const nextMonthStart =
     getStartOfNextMonth(timeZone);
+
+  const chartStartDate = new Date(monthStart);
+
+  chartStartDate.setDate(
+    chartStartDate.getDate() - 29
+  );
 
   const [
     appointmentsCount,
@@ -162,6 +243,7 @@ export default async function DashboardPage() {
     servicesCount,
     completedAppointments,
     monthlyCompletedAppointments,
+    chartAppointments,
     settings,
   ] = await Promise.all([
     prisma.appointment.count({
@@ -243,6 +325,28 @@ export default async function DashboardPage() {
       },
     }),
 
+    prisma.appointment.findMany({
+      where: {
+        businessId,
+        status: "COMPLETED",
+        date: {
+          gte: chartStartDate,
+          lt: nextMonthStart,
+        },
+      },
+      select: {
+        date: true,
+        service: {
+          select: {
+            price: true,
+          },
+        },
+      },
+      orderBy: {
+        date: "asc",
+      },
+    }),
+
     prisma.settings.findUnique({
       where: {
         businessId,
@@ -275,7 +379,53 @@ export default async function DashboardPage() {
       0
     );
 
+  const chartRevenue = new Map<string, number>();
+
+  for (const appointment of chartAppointments) {
+    const dateKey = getDateKey(
+      appointment.date,
+      timeZone
+    );
+
+    const currentRevenue =
+      chartRevenue.get(dateKey) ?? 0;
+
+    chartRevenue.set(
+      dateKey,
+      currentRevenue +
+        Number(appointment.service.price ?? 0)
+    );
+  }
+
+  const chartData: {
+    date: string;
+    revenue: number;
+  }[] = [];
+
+  const currentDate = new Date(
+    getStartOfDay(new Date(), timeZone)
+  );
+
+  for (let index = 29; index >= 0; index--) {
+    const date = new Date(currentDate);
+
+    date.setUTCDate(
+      date.getUTCDate() - index
+    );
+
+    const dateKey = getDateKey(
+      date,
+      timeZone
+    );
+
+    chartData.push({
+      date: formatChartDate(date, timeZone),
+      revenue: chartRevenue.get(dateKey) ?? 0,
+    });
+  }
+
   const currency = settings?.currency ?? "USD";
+
   const businessName =
     settings?.businessName ??
     businessContext.business.name ??
@@ -406,6 +556,27 @@ export default async function DashboardPage() {
           description="Completed appointments this month"
           icon={CreditCard}
         />
+      </section>
+
+      {/* Revenue chart */}
+      <section aria-label="Revenue analytics">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold tracking-tight">
+            Revenue Overview
+          </h2>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            Completed appointment revenue over the last
+            30 days.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-4 shadow-sm sm:p-6">
+          <RevenueChart
+            data={chartData}
+            currency={currency}
+          />
+        </div>
       </section>
 
       {/* Appointment status */}

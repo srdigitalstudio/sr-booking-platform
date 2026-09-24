@@ -154,12 +154,13 @@ export function EditAppointmentDialog({
         <div className="px-6 py-6">
           <AppointmentForm
             submitLabel="Update Appointment"
-            initialValues={{
-              customer: appointment.customer,
-              service: appointment.service,
-              date: appointment.date,
-              time: appointment.time,
-            }}
+           initialValues={{
+  customer: appointment.customer,
+  service: appointment.service,
+  date: appointment.date,
+  time: appointment.time,
+  staffId: appointment.staffId,
+}}
             onSubmit={handleSubmit}
           />
         </div>
