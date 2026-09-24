@@ -114,7 +114,7 @@ export async function POST(
   }
 
   try {
-   const businessId = context.business.id;
+    const businessId = context.business.id;
 
     const body = await request.json();
 
@@ -272,6 +272,9 @@ export async function PUT(
           id,
           businessId,
         },
+        select: {
+          id: true,
+        },
       });
 
     if (!existing) {
@@ -296,6 +299,9 @@ export async function PUT(
             not: id,
           },
         },
+        select: {
+          id: true,
+        },
       });
 
     if (duplicate) {
@@ -310,14 +316,34 @@ export async function PUT(
       );
     }
 
-    const blockedDate =
-      await prisma.blockedDate.update({
+    const result =
+      await prisma.blockedDate.updateMany({
         where: {
           id,
+          businessId,
         },
         data: {
           date,
           reason,
+        },
+      });
+
+    if (result.count !== 1) {
+      return Response.json(
+        {
+          error: "Blocked date not found",
+        },
+        {
+          status: 404,
+        }
+      );
+    }
+
+    const blockedDate =
+      await prisma.blockedDate.findFirst({
+        where: {
+          id,
+          businessId,
         },
       });
 
@@ -357,7 +383,7 @@ export async function DELETE(
   }
 
   try {
-   const businessId = context.business.id;
+    const businessId = context.business.id;
 
     const body = await request.json();
 
@@ -375,15 +401,15 @@ export async function DELETE(
       );
     }
 
-    const existing =
-      await prisma.blockedDate.findFirst({
+    const result =
+      await prisma.blockedDate.deleteMany({
         where: {
           id,
           businessId,
         },
       });
 
-    if (!existing) {
+    if (result.count !== 1) {
       return Response.json(
         {
           error: "Blocked date not found",
@@ -393,12 +419,6 @@ export async function DELETE(
         }
       );
     }
-
-    await prisma.blockedDate.delete({
-      where: {
-        id,
-      },
-    });
 
     return Response.json({
       success: true,
