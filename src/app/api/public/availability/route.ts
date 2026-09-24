@@ -101,31 +101,28 @@ function minutesToTime(totalMinutes: number): string {
 }
 
 function getDayOfWeek(
-  date: Date,
-  timezone: string
+  dateValue: string
 ): DayOfWeek {
-  const weekday = new Intl.DateTimeFormat(
-    "en-US",
-    {
-      weekday: "long",
-      timeZone: timezone,
-    }
-  ).format(date);
+  const date = parseDate(dateValue);
 
-  switch (weekday) {
-    case "Sunday":
+  if (!date) {
+    return "SUNDAY";
+  }
+
+  switch (date.getUTCDay()) {
+    case 0:
       return "SUNDAY";
-    case "Monday":
+    case 1:
       return "MONDAY";
-    case "Tuesday":
+    case 2:
       return "TUESDAY";
-    case "Wednesday":
+    case 3:
       return "WEDNESDAY";
-    case "Thursday":
+    case 4:
       return "THURSDAY";
-    case "Friday":
+    case 5:
       return "FRIDAY";
-    case "Saturday":
+    case 6:
       return "SATURDAY";
     default:
       return "SUNDAY";
@@ -138,6 +135,15 @@ function getDateKey(date: Date): string {
   ).padStart(2, "0")}-${String(
     date.getUTCDate()
   ).padStart(2, "0")}`;
+}
+
+function getCurrentDateKey(timezone: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 }
 
 function getCurrentTimeInTimezone(
@@ -164,6 +170,13 @@ function getCurrentTimeInTimezone(
     )?.value ?? "00";
 
   return `${hour}:${minute}`;
+}
+
+function compareDateKeys(
+  first: string,
+  second: string
+): number {
+  return first.localeCompare(second);
 }
 
 function generateSlots({
@@ -349,6 +362,25 @@ export async function GET(request: Request) {
       businessTimezone = "UTC";
     }
 
+    const currentDateKey =
+      getCurrentDateKey(businessTimezone);
+
+    const dateComparison = compareDateKeys(
+      dateValue,
+      currentDateKey
+    );
+
+    if (dateComparison < 0) {
+      return NextResponse.json({
+        date: dateValue,
+        serviceId,
+        available: false,
+        slots: [],
+        reason:
+          "This date is in the past and cannot be booked.",
+      });
+    }
+
     const settings =
       await prisma.settings.findUnique({
         where: {
@@ -398,10 +430,7 @@ export async function GET(request: Request) {
     }
 
     const dayOfWeek =
-      getDayOfWeek(
-        date,
-        businessTimezone
-      );
+      getDayOfWeek(dateValue);
 
     const businessHour =
       await prisma.businessHour.findUnique({
@@ -561,16 +590,8 @@ export async function GET(request: Request) {
       }
     );
 
-    const currentDateKey =
-      new Intl.DateTimeFormat("en-CA", {
-        timeZone: businessTimezone,
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      }).format(new Date());
-
     const currentTime =
-      dateValue === currentDateKey
+      dateComparison === 0
         ? getCurrentTimeInTimezone(
             businessTimezone
           )
